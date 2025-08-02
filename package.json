@@ -1,0 +1,39 @@
+{
+  "name": "mongodb-mcp",
+  "version": "1.1.0",
+  "description": "MongoDB Model Context Protocol server with enhanced live monitoring capabilities",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node --esm src/index.ts",
+    "watch": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "prepublish": "npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepare": "chmod +x bin/cli.js"
+  },
+  "bin": {
+    "mongodb-mcp": "./bin/cli.js"
+  },
+  "keywords": [
+    "mongodb",
+    "mcp",
+    "github-copilot",
+    "model-context-protocol"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.9.0",
+    "dotenv": "^16.4.5",
+    "mongodb": "^6.15.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.1",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.8.3"
+  }
+}
