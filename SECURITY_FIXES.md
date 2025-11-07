@@ -83,7 +83,7 @@ This document outlines all the security vulnerabilities, bugs, and code quality 
 **Impact**: Better error handling and automatic recovery from connection losses.
 
 ### 9. No Environment Variable Validation
-**Location**: `src/index.ts:228`
+**Location**: `src/index.ts:266-274`
 **Severity**: Medium
 **Issue**: `LOG_DIR` environment variable not validated for path traversal attacks.
 **Fix**:
