@@ -10,8 +10,7 @@
     "dev": "ts-node --esm src/index.ts",
     "watch": "ts-node-dev --respawn --transpile-only src/index.ts",
     "prepublish": "npm run build",
-    "test": "echo \"Install vitest to run tests: npm install --save-dev vitest\"",
-    "test:run": "vitest",
+    "test": "vitest",
     "prepare": "chmod +x bin/cli.js"
   },
   "bin": {
@@ -35,6 +34,7 @@
     "@types/node": "^22.14.1",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^2.1.9"
   }
 }
