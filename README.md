@@ -1,13 +1,13 @@
 # MongoDB MCP Server
 
-MongoDB Model Context Protocol server for GitHub Copilot integration.
+MongoDB Model Context Protocol server for AI assistants and development tools.
 
 ## Setup
 
 1. Install dependencies:
 
    ```
-   npm install
+   pnpm install
    ```
 
 2. Copy the example environment configuration:
@@ -23,20 +23,20 @@ MongoDB Model Context Protocol server for GitHub Copilot integration.
 Build and run:
 
 ```
-npm run build
-npm run start
+pnpm build
+pnpm start
 ```
 
 Development mode (no build required):
 
 ```
-npm run dev
+pnpm dev
 ```
 
 Watch mode (auto-restart on file changes):
 
 ```
-npm run watch
+pnpm watch
 ```
 
 ## Command Line Usage
@@ -168,7 +168,7 @@ The server now includes advanced query preprocessing that:
 
 ## Examples
 
-Here are some examples of how Copilot might use these operations:
+Here are some examples of operations you can perform:
 
 ### Basic Operations:
 ```
