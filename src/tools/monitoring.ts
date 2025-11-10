@@ -108,11 +108,15 @@ export function registerMonitoringTools(server: McpServer, client: MongoClient, 
       const { database = dbName, scale = 1, indexDetails = false } = args;
       try {
         const targetDb = client.db(database);
-        const stats = await targetDb.command({
+        const commandOptions: any = {
           dbStats: 1,
-          scale: scale,
-          indexDetails: indexDetails
-        });
+          scale: scale
+        };
+        // Only include indexDetails if explicitly set to true (MongoDB 8.0+ deprecated this)
+        if (indexDetails === true) {
+          commandOptions.indexDetails = true;
+        }
+        const stats = await targetDb.command(commandOptions);
 
         return {
           content: [

@@ -47,43 +47,90 @@ mongodb-mcp [options] [mongodb-uri] [database-name]
 
 ### Server Modes
 
-The server supports two modes for enhanced security:
+⚠️ **IMPORTANT SECURITY NOTICE**
 
-- **Read-Write Mode** (default): All operations available
-- **Read-Only Mode**: Only read operations (find, count, aggregate, etc.)
+The server supports two modes with **read-only as the default** for safety:
+
+- **Read-Only Mode** (DEFAULT): Only read operations (find, count, aggregate, monitoring, etc.)
+  - Safe for data exploration and analysis
+  - No risk of accidental data modification
+  - Recommended for most use cases
+
+- **Read-Write Mode**: All operations including insert, update, delete, drop
+  - ⚠️ **WARNING**: AI assistants can modify, delete, or drop data
+  - ⚠️ **WARNING**: Use only when you explicitly need write operations
+  - ⚠️ **WARNING**: Consider using on non-production databases
+  - Must be explicitly enabled via command line flag or environment variable
 
 ### Command Line Options
 
 ```
---read-only          Run server in read-only mode
---read-write         Run server in read-write mode (default)
+--read-only          Run server in read-only mode (default)
+--read-write         Run server in read-write mode (enables all write operations)
 --mode <mode>        Set mode: 'read-only' or 'read-write'
 ```
 
 ### Examples
 
 ```bash
-# Default read-write mode
+# Default read-only mode (safest)
 mongodb-mcp
 
-# Read-only mode for safe data exploration
-mongodb-mcp --read-only
+# Explicitly enable read-write mode (use with caution)
+mongodb-mcp --read-write
 
-# With custom URI and database
-mongodb-mcp --read-only mongodb://localhost:27017 mydb
+# With custom URI and database in read-only mode
+mongodb-mcp mongodb://localhost:27017 mydb
 
-# Using explicit mode flag
-mongodb-mcp --mode read-only mongodb://username:password@localhost:27017/admin mydb
+# Read-write mode with custom connection
+mongodb-mcp --read-write mongodb://localhost:27017 mydb
 ```
+
+### Recommended Setup: Separate MCP Instances
+
+The best practice is to configure **two separate MCP server instances** in your Claude Desktop config:
+
+**~/.config/claude-desktop/config.json** (Linux/Mac) or **%APPDATA%\Claude\config.json** (Windows):
+
+```json
+{
+  "mcpServers": {
+    "mongodb-readonly": {
+      "command": "mongodb-mcp",
+      "args": ["--read-only"],
+      "env": {
+        "MONGODB_URI": "mongodb://localhost:27017",
+        "MONGODB_DB": "mydb"
+      }
+    },
+    "mongodb-readwrite": {
+      "command": "mongodb-mcp",
+      "args": ["--read-write"],
+      "env": {
+        "MONGODB_URI": "mongodb://localhost:27017",
+        "MONGODB_DB": "mydb_dev"
+      }
+    }
+  }
+}
+```
+
+This approach gives you:
+- **mongodb-readonly**: Safe exploration without risk of data modification
+- **mongodb-readwrite**: Write operations available when explicitly needed
+- Clear separation of capabilities - AI assistants will see them as different tools
+- Option to point read-write to a development database for extra safety
 
 ## Environment Variables
 
-- `MONGODB_URI`: MongoDB connection URI
-- `MONGODB_DB`: Database name to use
-- `SERVER_MODE`: Server mode ('read-only' or 'read-write', default: 'read-write')
+- `MONGODB_URI`: MongoDB connection URI (default: mongodb://localhost:27017)
+- `MONGODB_DB`: Database name to use (default: test)
+- `SERVER_MODE`: Server mode ('read-only' or 'read-write', **default: 'read-only'**)
 - `LOG_DIR`: Directory for log files (default: ./logs)
 - `LOG_LEVEL`: Logging level (default: info)
 - `TOOL_PREFIX`: Optional prefix for tool names (to debug prefix-related issues)
+
+**Note**: The SERVER_MODE defaults to 'read-only' for safety. To enable write operations, explicitly set it to 'read-write' or use the --read-write command line flag.
 
 ## Logging and Debugging
 

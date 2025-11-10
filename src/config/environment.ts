@@ -7,7 +7,7 @@ export function parseArgs(): AppConfig {
   const args = process.argv.slice(2);
   let uri = process.env.MONGODB_URI || 'mongodb://localhost:27017';
   let dbName = process.env.MONGODB_DB || 'test';
-  let mode = process.env.SERVER_MODE || 'read-write';
+  let mode = process.env.SERVER_MODE || 'read-only';
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];

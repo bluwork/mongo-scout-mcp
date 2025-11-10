@@ -6,6 +6,8 @@ import { registerDocumentTools } from './document.js';
 import { registerSchemaTools } from './schema.js';
 import { registerMonitoringTools } from './monitoring.js';
 import { registerLiveMonitoringTools } from './live-monitoring.js';
+import { registerIndexManagementTools } from './index-management.js';
+import { registerAdvancedOperations } from './advanced-operations.js';
 
 export function registerAllTools(
   server: McpServer,
@@ -18,6 +20,8 @@ export function registerAllTools(
   registerCollectionTools(server, db, mode);
   registerDocumentTools(server, db, mode);
   registerSchemaTools(server, db);
+  registerIndexManagementTools(server, db, mode);
+  registerAdvancedOperations(server, db, mode);
   registerMonitoringTools(server, client, db, dbName, mode);
   registerLiveMonitoringTools(server, db, mode);
 }

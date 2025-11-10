@@ -249,10 +249,19 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
       const { collection } = args;
 
       try {
-        const stats = await db.command({
-          collStats: collection,
-          indexDetails: true
-        });
+        // Try with indexDetails first, fall back without it for MongoDB 8.0+
+        let stats;
+        try {
+          stats = await db.command({
+            collStats: collection,
+            indexDetails: true
+          });
+        } catch (e) {
+          // MongoDB 8.0+ deprecated indexDetails, try without it
+          stats = await db.command({
+            collStats: collection
+          });
+        }
 
         let indexUsage: any[] = [];
         try {
@@ -381,7 +390,7 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
     'getSlowestOperations',
     'Get slow operations from both profiler and currently running operations',
     {
-      minDuration: z.number().positive().optional(),
+      minDuration: z.number().min(0).optional(),
       limit: z.number().positive().optional(),
       includeRunning: z.boolean().optional(),
     },

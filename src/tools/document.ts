@@ -23,21 +23,27 @@ export function registerDocumentTools(server: McpServer, db: Db, mode: string): 
       limit: z.number().positive().optional(),
       skip: z.number().nonnegative().optional(),
       sort: z.record(z.number()).optional(),
+      hint: z.record(z.number()).optional(),
     },
     async (args) => {
       logToolUsage('find', args);
-      const { collection, query = {}, projection = {}, limit = 10, skip = 0, sort = {} as any } = args;
+      const { collection, query = {}, projection = {}, limit = 10, skip = 0, sort = {} as any, hint } = args;
       try {
         const processedQuery = preprocessQuery(query);
 
-        const docs = await db
+        let cursor = db
           .collection(collection)
           .find(processedQuery)
           .project(projection)
           .limit(limit)
           .skip(skip)
-          .sort(sort)
-          .toArray();
+          .sort(sort);
+
+        if (hint) {
+          cursor = cursor.hint(hint);
+        }
+
+        const docs = await cursor.toArray();
 
         const total = await db.collection(collection).countDocuments(processedQuery);
 
@@ -418,14 +424,22 @@ export function registerDocumentTools(server: McpServer, db: Db, mode: string): 
 
         const result = await db.collection(collection).findOneAndUpdate(processedFilter, update, mongoOptions);
 
+        let responseText: string;
+        if (result && result.value) {
+          responseText = JSON.stringify(result.value, null, 2);
+        } else if (result && result.lastErrorObject?.upserted) {
+          responseText = `New document created via upsert with _id: ${result.lastErrorObject.upserted}`;
+        } else if (options.upsert) {
+          responseText = 'New document created via upsert';
+        } else {
+          responseText = 'No document matched the query';
+        }
+
         return {
           content: [
             {
               type: 'text',
-              text:
-                result && result.value
-                  ? JSON.stringify(result.value, null, 2)
-                  : 'No document matched the query. If upsert was used, a new document was inserted.',
+              text: responseText,
             },
           ],
         };
