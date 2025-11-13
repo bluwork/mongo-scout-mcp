@@ -44,7 +44,7 @@ if (args.includes('--version') || args.includes('-v')) {
   // Read version from package.json
   try {
     const packageJsonPath = join(__dirname, '..', 'package.json');
-    const packageJson = await import(packageJsonPath, { assert: { type: 'json' } });
+    const packageJson = await import(packageJsonPath, { with: { type: 'json' } });
     console.log(`MongoDB MCP Server v${packageJson.default.version}`);
     process.exit(0);
   } catch (error) {

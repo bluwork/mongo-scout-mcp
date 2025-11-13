@@ -102,11 +102,11 @@ export interface CurrentOperation {
   microsecs_running: number;
   op: string;
   ns: string;
-  command?: object;
-  originatingCommand?: object;
+  command?: Record<string, unknown>;
+  originatingCommand?: Record<string, unknown>;
   client: string;
   appName?: string;
-  clientMetadata?: object;
+  clientMetadata?: Record<string, unknown>;
   desc: string;
   threadId: string;
   connectionId: number;
@@ -115,15 +115,15 @@ export interface CurrentOperation {
 export interface ProfilerEntry {
   op: string;
   ns: string;
-  command?: object;
+  command?: Record<string, unknown>;
   ts: Date;
   millis: number;
-  execStats?: object;
+  execStats?: Record<string, unknown>;
   planSummary?: string;
   keyUpdates?: number;
   writeConflicts?: number;
   numYield?: number;
-  locks?: object;
+  locks?: Record<string, unknown>;
   user?: string;
   appName?: string;
 }
@@ -131,8 +131,8 @@ export interface ProfilerEntry {
 export interface MongoAdminError {
   code: string;
   message: string;
-  details?: object;
-  mongoError?: object;
+  details?: Record<string, unknown>;
+  mongoError?: Record<string, unknown>;
 }
 
 export interface AppConfig {

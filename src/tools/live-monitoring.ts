@@ -144,9 +144,9 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
               indexDetails: false
             });
             initialCollectionOps.set(coll.name, {
-              operations: stats.wiredTiger?.cursor?.['insert calls'] || 0 +
-                         stats.wiredTiger?.cursor?.['update calls'] || 0 +
-                         stats.wiredTiger?.cursor?.['remove calls'] || 0,
+              operations: (stats.wiredTiger?.cursor?.['insert calls'] || 0) +
+                         (stats.wiredTiger?.cursor?.['update calls'] || 0) +
+                         (stats.wiredTiger?.cursor?.['remove calls'] || 0),
               stats
             });
           } catch (e) {
@@ -281,7 +281,7 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
         };
 
         try {
-          const profileStatus = await db.admin().command({ profile: -1 });
+          const profileStatus = await db.command({ profile: -1 });
           if (profileStatus.was > 0) {
             recentOps = await db.collection('system.profile')
               .find({ ns: `${db.databaseName}.${collection}` })
@@ -406,12 +406,12 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
         };
 
         try {
-          const profileStatus = await db.admin().command({ profile: -1 });
+          const profileStatus = await db.command({ profile: -1 });
           result.profilingStatus = profileStatus;
 
           if (profileStatus.was === 0) {
             try {
-              await db.admin().command({ profile: 1, slowms: minDuration });
+              await db.command({ profile: 1, slowms: minDuration });
               result.profilingStatus = { was: 1, slowms: minDuration, enabled: 'temporarily' };
             } catch (e) {
               result.profilingStatus.message = 'Profiling is disabled and could not be enabled automatically';

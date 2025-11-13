@@ -5,13 +5,25 @@ import { setupServer } from './server/setup.js';
 const { uri, dbName, mode } = parseArgs();
 const client = new MongoClient(uri);
 
+let isShuttingDown = false;
+
+async function shutdown() {
+  if (isShuttingDown) {
+    return;
+  }
+  isShuttingDown = true;
+
+  try {
+    await client.close();
+  } catch (error) {
+    console.error('Error during shutdown:', error);
+  }
+  process.exit(0);
+}
+
 async function main() {
   try {
     await client.connect();
-    console.log('Connected to MongoDB successfully');
-    console.log(`Using database: ${dbName}`);
-    console.log(`Server mode: ${mode}`);
-
     await setupServer(client, dbName, mode);
   } catch (error) {
     console.error('Error:', error instanceof Error ? error.message : String(error));
@@ -22,17 +34,8 @@ async function main() {
   }
 }
 
-process.on('SIGINT', async () => {
-  console.log('Shutting down...');
-  await client.close();
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  console.log('Shutting down...');
-  await client.close();
-  process.exit(0);
-});
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 main().catch((error) => {
   console.error('Fatal error:', error);

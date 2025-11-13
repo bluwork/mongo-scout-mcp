@@ -15,8 +15,8 @@ export function parseArgs(): AppConfig {
       mode = 'read-only';
     } else if (arg === '--read-write') {
       mode = 'read-write';
-    } else if (arg === '--mode') {
-      mode = args[++i] || mode;
+    } else if (arg === '--mode' && i + 1 < args.length) {
+      mode = args[++i];
     } else if (!uri || uri === 'mongodb://localhost:27017') {
       uri = arg;
     } else if (!dbName || dbName === 'test') {

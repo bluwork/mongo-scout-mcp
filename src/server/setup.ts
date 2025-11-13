@@ -14,7 +14,5 @@ export async function setupServer(client: MongoClient, dbName: string, mode: str
   registerAllTools(server, client, db, dbName, mode);
 
   const transport = new StdioServerTransport();
-  console.log('Starting MongoDB MCP server...');
   await server.connect(transport);
-  console.log('MCP Server running. Waiting for requests...');
 }

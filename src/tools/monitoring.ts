@@ -164,18 +164,21 @@ export function registerMonitoringTools(server: McpServer, client: MongoClient, 
         };
       }
 
-      const dangerousCommands = [
-        'shutdown', 'fsync', 'dropDatabase', 'eval', 'geoNear',
-        'mapReduce', 'copydb', 'clone', 'copydbgetnonce', 'planCacheClear'
+      const allowedCommands = [
+        'serverstatus', 'dbstats', 'collstats', 'replsetstatus', 'replsetgetconfig',
+        'isMaster', 'ismaster', 'hello', 'ping', 'buildinfo', 'connectionstatus',
+        'getcmdlineopts', 'hostinfo', 'listdatabases', 'listcommands', 'profile',
+        'currentop', 'top', 'validate', 'explain', 'getlog', 'getparameter',
+        'connpoolstats', 'shardingstatus'
       ];
 
       const commandName = Object.keys(command)[0]?.toLowerCase();
-      if (dangerousCommands.includes(commandName)) {
+      if (!commandName || !allowedCommands.includes(commandName)) {
         return {
           content: [
             {
               type: 'text',
-              text: `Command '${commandName}' is not allowed for security reasons.`,
+              text: `Command '${commandName}' is not in the list of allowed commands. Allowed: ${allowedCommands.join(', ')}`,
             },
           ],
         };
@@ -386,7 +389,7 @@ export function registerMonitoringTools(server: McpServer, client: MongoClient, 
       try {
         const targetDb = client.db(database);
 
-        const profileStatus = await targetDb.admin().command({ profile: -1 });
+        const profileStatus = await targetDb.command({ profile: -1 });
 
         if (profileStatus.was === 0) {
           return {
