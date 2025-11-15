@@ -4,6 +4,18 @@ import { z } from 'zod';
 import { logToolUsage, logError } from '../utils/logger.js';
 import { checkAdminRateLimit, ADMIN_RATE_LIMIT } from '../utils/rate-limiter.js';
 import { sanitizeResponse } from '../utils/sanitize.js';
+import type {
+  ServerStatus,
+  LiveMetric,
+  HottestCollection,
+  CollectionStats,
+  IndexUsageStat,
+  ProfilerEntry,
+  ProfilerStatus,
+  SlowOperation,
+  CurrentOpCommand,
+  CurrentOpResult
+} from '../types.js';
 
 export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: string): void {
   const registerTool = (toolName: string, description: string, schema: any, handler: (args?: any) => any, writeOperation = false) => {
@@ -37,43 +49,47 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
 
       try {
         const startTime = Date.now();
-        const metrics: any[] = [];
+        const metrics: LiveMetric[] = [];
 
-        let previousStatus = await db.admin().command({ serverStatus: 1 });
+        let previousStatus = await db.admin().command({ serverStatus: 1 }) as ServerStatus;
 
         while (Date.now() - startTime < duration) {
           await new Promise(resolve => setTimeout(resolve, interval));
 
-          const currentStatus = await db.admin().command({ serverStatus: 1 });
+          const currentStatus = await db.admin().command({ serverStatus: 1 }) as ServerStatus;
 
+          const currentOps = currentStatus.opcounters!;
+          const prevOps = previousStatus.opcounters!;
           const opsPerSec = {
-            insert: (currentStatus.opcounters.insert - previousStatus.opcounters.insert) / (interval / 1000),
-            query: (currentStatus.opcounters.query - previousStatus.opcounters.query) / (interval / 1000),
-            update: (currentStatus.opcounters.update - previousStatus.opcounters.update) / (interval / 1000),
-            delete: (currentStatus.opcounters.delete - previousStatus.opcounters.delete) / (interval / 1000),
-            command: (currentStatus.opcounters.command - previousStatus.opcounters.command) / (interval / 1000),
-            getmore: (currentStatus.opcounters.getmore - previousStatus.opcounters.getmore) / (interval / 1000)
+            insert: (currentOps.insert - prevOps.insert) / (interval / 1000),
+            query: (currentOps.query - prevOps.query) / (interval / 1000),
+            update: (currentOps.update - prevOps.update) / (interval / 1000),
+            delete: (currentOps.delete - prevOps.delete) / (interval / 1000),
+            command: (currentOps.command - prevOps.command) / (interval / 1000),
+            getmore: (currentOps.getmore - prevOps.getmore) / (interval / 1000)
           };
 
+          const currentNet = currentStatus.network!;
+          const prevNet = previousStatus.network!;
           const networkRates = {
-            bytesInPerSec: (currentStatus.network.bytesIn - previousStatus.network.bytesIn) / (interval / 1000),
-            bytesOutPerSec: (currentStatus.network.bytesOut - previousStatus.network.bytesOut) / (interval / 1000),
-            requestsPerSec: (currentStatus.network.numRequests - previousStatus.network.numRequests) / (interval / 1000)
+            bytesInPerSec: (currentNet.bytesIn - prevNet.bytesIn) / (interval / 1000),
+            bytesOutPerSec: (currentNet.bytesOut - prevNet.bytesOut) / (interval / 1000),
+            requestsPerSec: (currentNet.numRequests - prevNet.numRequests) / (interval / 1000)
           };
 
           metrics.push({
             timestamp: new Date().toISOString(),
             operations: {
-              counters: currentStatus.opcounters,
+              counters: currentOps,
               ratesPerSecond: opsPerSec
             },
-            connections: currentStatus.connections,
+            connections: currentStatus.connections!,
             network: {
-              totals: currentStatus.network,
+              totals: currentNet,
               ratesPerSecond: networkRates
             },
-            memory: currentStatus.mem,
-            globalLock: currentStatus.globalLock
+            memory: currentStatus.mem!,
+            globalLock: currentStatus.globalLock!
           });
 
           previousStatus = currentStatus;
@@ -132,17 +148,17 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
 
       try {
         const collections = await db.listCollections().toArray();
-        const collectionStats: any[] = [];
+        const collectionStats: HottestCollection[] = [];
 
-        const initialStatus = await db.admin().command({ serverStatus: 1 });
+        const initialStatus = await db.admin().command({ serverStatus: 1 }) as ServerStatus;
 
-        const initialCollectionOps = new Map<string, any>();
+        const initialCollectionOps = new Map<string, { operations: number; stats: CollectionStats }>();
         for (const coll of collections) {
           try {
             const stats = await db.command({
               collStats: coll.name,
               indexDetails: false
-            });
+            }) as unknown as CollectionStats & { wiredTiger?: Record<string, Record<string, number>> };
             initialCollectionOps.set(coll.name, {
               operations: (stats.wiredTiger?.cursor?.['insert calls'] || 0) +
                          (stats.wiredTiger?.cursor?.['update calls'] || 0) +
@@ -161,9 +177,9 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
           const currentOps = await db.admin().command({
             currentOp: true,
             "$all": true
-          });
+          }) as CurrentOpResult;
 
-          currentOps.inprog.forEach((op: any) => {
+          currentOps.inprog.forEach((op) => {
             if (op.ns && op.active) {
               const collName = op.ns.split('.').slice(1).join('.');
               if (collName) {
@@ -175,11 +191,13 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
           await new Promise(resolve => setTimeout(resolve, 100));
         }
 
-        const finalStatus = await db.admin().command({ serverStatus: 1 });
-        const totalOps = finalStatus.opcounters.insert + finalStatus.opcounters.query +
-                        finalStatus.opcounters.update + finalStatus.opcounters.delete -
-                        (initialStatus.opcounters.insert + initialStatus.opcounters.query +
-                         initialStatus.opcounters.update + initialStatus.opcounters.delete);
+        const finalStatus = await db.admin().command({ serverStatus: 1 }) as ServerStatus;
+        const finalOps = finalStatus.opcounters!;
+        const initialOps = initialStatus.opcounters!;
+        const totalOps = finalOps.insert + finalOps.query +
+                        finalOps.update + finalOps.delete -
+                        (initialOps.insert + initialOps.query +
+                         initialOps.update + initialOps.delete);
 
         for (const coll of collections) {
           try {
@@ -263,16 +281,16 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
           });
         }
 
-        let indexUsage: any[] = [];
+        let indexUsage: IndexUsageStat[] = [];
         try {
           indexUsage = await db.collection(collection).aggregate([
             { $indexStats: {} }
-          ]).toArray();
+          ]).toArray() as IndexUsageStat[];
         } catch (e) {
           // $indexStats might not be available
         }
 
-        let recentOps: any[] = [];
+        let recentOps: ProfilerEntry[] = [];
         let operationCounts = {
           insert: 0,
           query: 0,
@@ -281,13 +299,13 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
         };
 
         try {
-          const profileStatus = await db.command({ profile: -1 });
+          const profileStatus = await db.command({ profile: -1 }) as ProfilerStatus;
           if (profileStatus.was > 0) {
             recentOps = await db.collection('system.profile')
               .find({ ns: `${db.databaseName}.${collection}` })
               .sort({ ts: -1 })
               .limit(100)
-              .toArray();
+              .toArray() as unknown as ProfilerEntry[];
 
             recentOps.forEach(op => {
               if (op.op === 'insert') operationCounts.insert++;
@@ -300,13 +318,14 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
           // Profiling might not be enabled
         }
 
-        const currentOps = await db.admin().command({
+        const currentOpsCommand: CurrentOpCommand = {
           currentOp: true,
-          "$all": true,
+          $all: true,
           ns: `${db.databaseName}.${collection}`
-        });
+        };
+        const currentOps = await db.admin().command(currentOpsCommand) as CurrentOpResult;
 
-        const activeOperations = currentOps.inprog.filter((op: any) => op.active);
+        const activeOperations = currentOps.inprog.filter((op) => op.active);
 
         let opsPerSecond = null;
         if (recentOps.length > 1) {
@@ -348,7 +367,7 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
           operations: {
             current: {
               active: activeOperations.length,
-              operations: activeOperations.map((op: any) => ({
+              operations: activeOperations.map((op) => ({
                 operation: op.op,
                 duration: op.secs_running || 0,
                 opid: op.opid
@@ -399,7 +418,11 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
       const { minDuration = 100, limit = 10, includeRunning = true } = args;
 
       try {
-        const result: any = {
+        const result: {
+          profiledOperations: SlowOperation[];
+          currentSlowOperations: SlowOperation[];
+          profilingStatus: ProfilerStatus | { error: string } | null;
+        } = {
           profiledOperations: [],
           currentSlowOperations: [],
           profilingStatus: null
@@ -409,7 +432,7 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
         let originalSlowMs: number | null = null;
 
         try {
-          const profileStatus = await db.command({ profile: -1 });
+          const profileStatus = await db.command({ profile: -1 }) as ProfilerStatus;
           result.profilingStatus = profileStatus;
 
           if (profileStatus.was === 0) {
@@ -417,9 +440,11 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
               originalProfilingLevel = profileStatus.was;
               originalSlowMs = profileStatus.slowms ?? 100;
               await db.command({ profile: 1, slowms: minDuration });
-              result.profilingStatus = { was: 1, slowms: minDuration, enabled: 'temporarily' };
+              result.profilingStatus = { was: 1, slowms: minDuration, enabled: 'temporarily', ok: 1 };
             } catch (e) {
-              result.profilingStatus.message = 'Profiling is disabled and could not be enabled automatically';
+              if (result.profilingStatus && 'was' in result.profilingStatus) {
+                result.profilingStatus.message = 'Profiling is disabled and could not be enabled automatically';
+              }
             }
           }
 
@@ -460,17 +485,18 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
         }
 
         if (includeRunning) {
-          const currentOps = await db.admin().command({
+          const currentOpsCommand: CurrentOpCommand = {
             currentOp: true,
-            "$all": true,
-            "microsecs_running": { "$gte": minDuration * 1000 }
-          });
+            $all: true,
+            microsecs_running: { $gte: minDuration * 1000 }
+          };
+          const currentOps = await db.admin().command(currentOpsCommand) as CurrentOpResult;
 
           result.currentSlowOperations = currentOps.inprog
-            .filter((op: any) => op.active && op.microsecs_running >= minDuration * 1000)
-            .sort((a: any, b: any) => b.microsecs_running - a.microsecs_running)
+            .filter((op) => op.active && op.microsecs_running >= minDuration * 1000)
+            .sort((a, b) => b.microsecs_running - a.microsecs_running)
             .slice(0, limit)
-            .map((op: any) => ({
+            .map((op): SlowOperation => ({
               operation: op.op,
               namespace: op.ns,
               duration: Math.round(op.microsecs_running / 1000),
@@ -480,15 +506,16 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
               query: sanitizeResponse(op.command || {}),
               client: op.client || 'N/A',
               appName: op.appName || 'N/A',
-              waitingForLock: op.waitingForLock || false,
-              lockStats: op.lockStats || {},
-              killable: op.op !== 'none'
+              waitingForLock: (op as unknown as { waitingForLock?: boolean }).waitingForLock || false,
+              lockStats: (op as unknown as { lockStats?: Record<string, unknown> }).lockStats || {},
+              killable: op.op !== 'none',
+              source: 'currentOp'
             }));
         }
 
-        const allOperations = [
-          ...result.profiledOperations.map((op: any) => ({ ...op, source: 'profiler' })),
-          ...result.currentSlowOperations.map((op: any) => ({ ...op, source: 'currentOp' }))
+        const allOperations: SlowOperation[] = [
+          ...result.profiledOperations.map((op) => ({ ...op, source: 'profiler' as const })),
+          ...result.currentSlowOperations
         ].sort((a, b) => b.duration - a.duration);
 
         const summary = {
@@ -497,7 +524,7 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
             ? Math.round(allOperations.reduce((sum, op) => sum + op.duration, 0) / allOperations.length)
             : 0,
           slowestOperation: allOperations[0] || null,
-          operationTypes: allOperations.reduce((acc: any, op) => {
+          operationTypes: allOperations.reduce((acc: Record<string, number>, op) => {
             acc[op.operation] = (acc[op.operation] || 0) + 1;
             return acc;
           }, {}),

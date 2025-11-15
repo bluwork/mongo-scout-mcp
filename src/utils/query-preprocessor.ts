@@ -1,4 +1,5 @@
 import { ObjectId } from 'mongodb';
+import type { MongoQuery, MongoFilter } from '../types.js';
 
 function isObjectIdField(fieldName: string): boolean {
   const objectIdPatterns = [
@@ -12,15 +13,15 @@ function isObjectIdField(fieldName: string): boolean {
   return objectIdPatterns.some(pattern => pattern.test(fieldName));
 }
 
-function preprocessQueryValue(value: any, fieldName?: string): any {
+function preprocessQueryValue(value: unknown, fieldName?: string): unknown {
   if (!value || typeof value !== 'object') {
     return value;
   }
 
-  const processed: any = {};
+  const processed: Record<string, unknown> = {};
   const isObjectIdFieldName = fieldName ? isObjectIdField(fieldName) : false;
 
-  for (const [operator, operatorValue] of Object.entries(value)) {
+  for (const [operator, operatorValue] of Object.entries(value as Record<string, unknown>)) {
     if (operator.startsWith('$')) {
       if (Array.isArray(operatorValue)) {
         processed[operator] = operatorValue.map(item => {
@@ -42,12 +43,12 @@ function preprocessQueryValue(value: any, fieldName?: string): any {
   return processed;
 }
 
-export function preprocessQuery(query: any): any {
+export function preprocessQuery(query: MongoQuery): MongoFilter {
   if (!query || typeof query !== 'object') {
     return query;
   }
 
-  const processed: any = {};
+  const processed: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(query)) {
     if (isObjectIdField(key)) {
@@ -59,13 +60,13 @@ export function preprocessQuery(query: any): any {
         processed[key] = value;
       }
     } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      processed[key] = preprocessQuery(value);
+      processed[key] = preprocessQuery(value as MongoQuery);
     } else if (Array.isArray(value)) {
       processed[key] = value.map(item => {
         if (isObjectIdField(key) && typeof item === 'string' && ObjectId.isValid(item)) {
           return new ObjectId(item);
         }
-        return typeof item === 'object' ? preprocessQuery(item) : item;
+        return typeof item === 'object' ? preprocessQuery(item as MongoQuery) : item;
       });
     } else {
       processed[key] = value;

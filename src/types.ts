@@ -141,3 +141,185 @@ export interface AppConfig {
   mode: string;
   logDir: string;
 }
+
+export interface CurrentOpCommand {
+  currentOp: boolean | number;
+  $all?: boolean;
+  $ownOps?: boolean;
+  $local?: boolean;
+  $truncateOps?: boolean;
+  ns?: string;
+  microsecs_running?: { $gte: number };
+}
+
+export interface CurrentOpResult {
+  inprog: CurrentOperation[];
+  ok: number;
+}
+
+export interface CollectionStats {
+  ns: string;
+  size: number;
+  count: number;
+  avgObjSize: number;
+  storageSize: number;
+  freeStorageSize?: number;
+  nindexes: number;
+  totalIndexSize: number;
+  indexSizes?: Record<string, number>;
+  capped?: boolean;
+  max?: number;
+  wiredTiger?: Record<string, unknown>;
+}
+
+export interface IndexUsageStat {
+  name: string;
+  accesses?: {
+    ops: number;
+    since: Date;
+  };
+}
+
+export interface LiveMetric {
+  timestamp: string;
+  operations: {
+    counters: NonNullable<ServerStatus['opcounters']>;
+    ratesPerSecond: {
+      insert: number;
+      query: number;
+      update: number;
+      delete: number;
+      command: number;
+      getmore: number;
+    };
+  };
+  connections: NonNullable<ServerStatus['connections']>;
+  network: {
+    totals: NonNullable<ServerStatus['network']>;
+    ratesPerSecond: {
+      bytesInPerSec: number;
+      bytesOutPerSec: number;
+      requestsPerSec: number;
+    };
+  };
+  memory: NonNullable<ServerStatus['mem']>;
+  globalLock: NonNullable<ServerStatus['globalLock']>;
+}
+
+export interface ProfilerStatus {
+  was: number;
+  slowms?: number;
+  sampleRate?: number;
+  filter?: Record<string, unknown>;
+  ok: number;
+  enabled?: string;
+  message?: string;
+}
+
+export interface SlowOperation {
+  operation: string;
+  namespace: string;
+  duration: number;
+  timestamp?: Date;
+  query?: Record<string, unknown>;
+  planSummary?: string;
+  docsExamined?: number;
+  keysExamined?: number;
+  writeConflicts?: number;
+  user?: string;
+  client?: string;
+  appName?: string;
+  source?: 'profiler' | 'currentOp';
+  active?: boolean;
+  opid?: number;
+  runningTime?: number;
+  waitingForLock?: boolean;
+  lockStats?: Record<string, unknown>;
+  killable?: boolean;
+}
+
+export interface HottestCollection {
+  collection: string;
+  namespace: string;
+  activeOperations: number;
+  percentageOfTotal: number;
+  size: number;
+  count: number;
+  avgObjSize: number;
+  indexes: number;
+  readWriteRatio: string | number;
+}
+
+export interface CollectionMetrics {
+  collection: string;
+  namespace: string;
+  storage: {
+    documents: number;
+    size: number;
+    avgDocumentSize: number;
+    storageSize: number;
+    freeStorageSize: number;
+    capped: boolean;
+    max: number | null;
+  };
+  indexes: {
+    count: number;
+    totalSize: number;
+    details: Record<string, number>;
+    usage: Array<{
+      name: string;
+      operations: number;
+      since: Date | null;
+    }>;
+  };
+  operations: {
+    current: {
+      active: number;
+      operations: Array<{
+        operation: string;
+        duration: number;
+        opid: number;
+      }>;
+    };
+    recent: {
+      count: number;
+      breakdown: {
+        insert: number;
+        query: number;
+        update: number;
+        delete: number;
+      };
+    };
+    ratesPerSecond: {
+      insert: number;
+      query: number;
+      update: number;
+      delete: number;
+      total: number;
+    } | null;
+  };
+  wiredTiger: Record<string, unknown> | null;
+}
+
+export type MongoDocument = Record<string, unknown>;
+export type MongoQuery = Record<string, unknown>;
+export type MongoFilter = Record<string, unknown>;
+export type MongoUpdate = Record<string, unknown>;
+export type MongoProjection = Record<string, number | boolean>;
+export type MongoSort = Record<string, 1 | -1>;
+export type MongoPipeline = Array<Record<string, unknown>>;
+
+export interface SchemaField {
+  type: string;
+  required?: boolean;
+  unique?: boolean;
+  enum?: unknown[];
+  examples?: unknown[];
+  nested?: Record<string, SchemaField>;
+}
+
+export type InferredSchema = Record<string, SchemaField>;
+
+export interface ToolHandler<TArgs = unknown, TResult = unknown> {
+  (args: TArgs): Promise<TResult>;
+}

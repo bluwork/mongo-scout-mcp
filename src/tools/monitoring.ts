@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { logToolUsage, logError } from '../utils/logger.js';
 import { checkAdminRateLimit, ADMIN_RATE_LIMIT } from '../utils/rate-limiter.js';
 import { sanitizeResponse } from '../utils/sanitize.js';
+import type { CurrentOpCommand, CurrentOpResult, ServerStatus } from '../types.js';
 
 export function registerMonitoringTools(server: McpServer, client: MongoClient, db: Db, dbName: string, mode: string): void {
   const registerTool = (toolName: string, description: string, schema: any, handler: (args?: any) => any, writeOperation = false) => {
@@ -36,9 +37,9 @@ export function registerMonitoringTools(server: McpServer, client: MongoClient, 
       }
 
       try {
-        const serverStatus = await db.admin().command({ serverStatus: 1 });
+        const serverStatus = await db.admin().command({ serverStatus: 1 }) as ServerStatus;
 
-        let filteredStatus: any = {
+        let filteredStatus: Partial<ServerStatus> = {
           version: serverStatus.version,
           process: serverStatus.process,
           pid: serverStatus.pid,
@@ -63,9 +64,11 @@ export function registerMonitoringTools(server: McpServer, client: MongoClient, 
             asserts: serverStatus.asserts,
           };
         } else {
+          type MetricKey = keyof ServerStatus;
           includeMetrics.forEach((metric: string) => {
-            if (serverStatus[metric]) {
-              filteredStatus[metric] = serverStatus[metric];
+            const key = metric as MetricKey;
+            if (serverStatus[key]) {
+              (filteredStatus as Record<string, unknown>)[metric] = serverStatus[key];
             }
           });
         }
@@ -297,7 +300,7 @@ export function registerMonitoringTools(server: McpServer, client: MongoClient, 
       }
 
       try {
-        const currentOpCommand: any = {
+        const currentOpCommand: CurrentOpCommand = {
           currentOp: true,
           $all: allUsers,
           $ownOps: !allUsers
@@ -307,24 +310,24 @@ export function registerMonitoringTools(server: McpServer, client: MongoClient, 
         if (localOps) currentOpCommand.$local = true;
         if (truncateOps) currentOpCommand.$truncateOps = true;
 
-        const result = await db.admin().command(currentOpCommand);
+        const result = await db.admin().command(currentOpCommand) as CurrentOpResult;
 
         let operations = result.inprog || [];
         if (!idleConnections) {
-          operations = operations.filter((op: any) => op.active || op.op !== 'none');
+          operations = operations.filter((op) => op.active || op.op !== 'none');
         }
 
         if (!idleCursors) {
-          operations = operations.filter((op: any) => !op.cursor || op.active);
+          operations = operations.filter((op) => !(op as unknown as { cursor?: unknown }).cursor || op.active);
         }
 
         if (excludeSensitiveData) {
-          operations = operations.map((op: any) => {
+          operations = operations.map((op) => {
             const sanitizedOp = { ...op };
 
             if (sanitizedOp.command) {
               const sanitizedCommand = sanitizeResponse(sanitizedOp.command);
-              sanitizedOp.command = sanitizedCommand;
+              sanitizedOp.command = sanitizedCommand as Record<string, unknown>;
             }
 
             if (sanitizedOp.clientMetadata) {
@@ -340,7 +343,7 @@ export function registerMonitoringTools(server: McpServer, client: MongoClient, 
           ok: result.ok,
           metadata: {
             totalOperations: operations.length,
-            activeOperations: operations.filter((op: any) => op.active).length,
+            activeOperations: operations.filter((op) => op.active).length,
             timestamp: new Date().toISOString()
           }
         };

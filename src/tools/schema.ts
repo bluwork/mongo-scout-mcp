@@ -3,6 +3,7 @@ import { ObjectId } from 'mongodb';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { logToolUsage, logError } from '../utils/logger.js';
+import type { MongoDocument } from '../types.js';
 
 export function registerSchemaTools(server: McpServer, db: Db): void {
   server.tool(
@@ -31,7 +32,7 @@ export function registerSchemaTools(server: McpServer, db: Db): void {
           };
         }
 
-        const inferSchema = (documents: any[]) => {
+        const inferSchema = (documents: MongoDocument[]): Record<string, string[]> => {
           const schemaMap = new Map<string, Set<string>>();
 
           documents.forEach((doc) => {
