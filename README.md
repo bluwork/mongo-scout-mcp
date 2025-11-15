@@ -4,19 +4,11 @@ MongoDB Model Context Protocol server for AI assistants and development tools.
 
 ## Setup
 
-1. Install dependencies:
+Install dependencies:
 
-   ```
-   pnpm install
-   ```
-
-2. Copy the example environment configuration:
-
-   ```
-   cp .env.example .env
-   ```
-
-3. Configure the `.env` file with your MongoDB connection details.
+```
+pnpm install
+```
 
 ## Running the server
 
@@ -97,19 +89,11 @@ The best practice is to configure **two separate MCP server instances** in your 
   "mcpServers": {
     "mongodb-readonly": {
       "command": "mongodb-mcp",
-      "args": ["--read-only"],
-      "env": {
-        "MONGODB_URI": "mongodb://localhost:27017",
-        "MONGODB_DB": "mydb"
-      }
+      "args": ["--read-only", "mongodb://localhost:27017", "mydb"]
     },
     "mongodb-readwrite": {
       "command": "mongodb-mcp",
-      "args": ["--read-write"],
-      "env": {
-        "MONGODB_URI": "mongodb://localhost:27017",
-        "MONGODB_DB": "mydb_dev"
-      }
+      "args": ["--read-write", "mongodb://localhost:27017", "mydb_dev"]
     }
   }
 }
@@ -120,17 +104,6 @@ This approach gives you:
 - **mongodb-readwrite**: Write operations available when explicitly needed
 - Clear separation of capabilities - AI assistants will see them as different tools
 - Option to point read-write to a development database for extra safety
-
-## Environment Variables
-
-- `MONGODB_URI`: MongoDB connection URI (default: mongodb://localhost:27017)
-- `MONGODB_DB`: Database name to use (default: test)
-- `SERVER_MODE`: Server mode ('read-only' or 'read-write', **default: 'read-only'**)
-- `LOG_DIR`: Directory for log files (default: ./logs)
-- `LOG_LEVEL`: Logging level (default: info)
-- `TOOL_PREFIX`: Optional prefix for tool names (to debug prefix-related issues)
-
-**Note**: The SERVER_MODE defaults to 'read-only' for safety. To enable write operations, explicitly set it to 'read-write' or use the --read-write command line flag.
 
 ## Logging and Debugging
 
@@ -152,15 +125,6 @@ Two main log files are created in the `LOG_DIR` directory:
    - Tool name
    - Error message and stack trace
    - Arguments that caused the error
-
-### Debugging Tool Prefix Issues
-
-If you're experiencing issues like "Tool 9f1*find does not have an implementation registered", this may be due to a prefix mismatch. The MCP server registers tools like "find", but the external AI might be trying to call them with a prefix like "9f1*".
-
-To debug this:
-
-1. Check the `tool-usage.log` to see what tool names are being called
-2. Set `TOOL_PREFIX` in your .env file if you identify a consistent prefix
 
 ### Viewing Logs in Real-Time
 

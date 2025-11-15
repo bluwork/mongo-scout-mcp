@@ -405,12 +405,17 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
           profilingStatus: null
         };
 
+        let originalProfilingLevel: number | null = null;
+        let originalSlowMs: number | null = null;
+
         try {
           const profileStatus = await db.command({ profile: -1 });
           result.profilingStatus = profileStatus;
 
           if (profileStatus.was === 0) {
             try {
+              originalProfilingLevel = profileStatus.was;
+              originalSlowMs = profileStatus.slowms ?? 100;
               await db.command({ profile: 1, slowms: minDuration });
               result.profilingStatus = { was: 1, slowms: minDuration, enabled: 'temporarily' };
             } catch (e) {
@@ -443,6 +448,15 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
         } catch (e) {
           result.profiledOperations = [];
           result.profilingStatus = { error: 'Could not access profiler data' };
+        } finally {
+          // Restore original profiling state if we temporarily enabled it
+          if (originalProfilingLevel !== null) {
+            try {
+              await db.command({ profile: originalProfilingLevel, slowms: originalSlowMs });
+            } catch (e) {
+              // Log but don't fail if we can't restore profiling state
+            }
+          }
         }
 
         if (includeRunning) {

@@ -297,18 +297,17 @@ export function registerMonitoringTools(server: McpServer, client: MongoClient, 
       }
 
       try {
-        const currentOpOptions: any = {
+        const currentOpCommand: any = {
+          currentOp: true,
           $all: allUsers,
           $ownOps: !allUsers
         };
 
-        if (idleConnections) currentOpOptions.$ownOps = false;
-        if (localOps) currentOpOptions.$local = true;
-        if (truncateOps) currentOpOptions.$truncateOps = true;
+        if (idleConnections) currentOpCommand.$ownOps = false;
+        if (localOps) currentOpCommand.$local = true;
+        if (truncateOps) currentOpCommand.$truncateOps = true;
 
-        const result = await db.admin().command({
-          currentOp: currentOpOptions
-        });
+        const result = await db.admin().command(currentOpCommand);
 
         let operations = result.inprog || [];
         if (!idleConnections) {

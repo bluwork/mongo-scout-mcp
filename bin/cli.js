@@ -17,21 +17,20 @@ Usage:
   mongodb-mcp [options] [mongodb-uri] [database-name]
 
 Options:
-  --help, -h       Show this help message
-  --version, -v    Show version number
+  --help, -h         Show this help message
+  --version, -v      Show version number
+  --read-only        Run server in read-only mode (default)
+  --read-write       Run server in read-write mode (enables all write operations)
+  --mode <mode>      Set mode: 'read-only' or 'read-write'
 
 Arguments:
-  mongodb-uri      MongoDB connection URI (default: mongodb://localhost:27017)
-  database-name    Database name to use (default: test)
-
-Environment Variables:
-  MONGODB_URI      MongoDB connection URI (overrides command line argument)
-  MONGODB_DB       Database name to use (overrides command line argument)
+  mongodb-uri        MongoDB connection URI (default: mongodb://localhost:27017)
+  database-name      Database name to use (default: test)
 
 Examples:
   mongodb-mcp
-  mongodb-mcp mongodb://localhost:27017 mydb
-  mongodb-mcp mongodb://username:password@localhost:27017/admin mydb
+  mongodb-mcp --read-write mongodb://localhost:27017 mydb
+  mongodb-mcp --mode read-only mongodb://localhost:27017 mydb
 `;
 
 // Handle command-line options
@@ -48,13 +47,15 @@ if (args.includes('--version') || args.includes('-v')) {
     console.log(`MongoDB MCP Server v${packageJson.default.version}`);
     process.exit(0);
   } catch (error) {
-    console.error('Could not determine version:', error instanceof Error ? error.message : String(error));
+    console.error(
+      'Could not determine version:',
+      error instanceof Error ? error.message : String(error)
+    );
     process.exit(1);
   }
 }
 
-// Filter out options from arguments
-const filteredArgs = args.filter((arg) => !arg.startsWith('-'));
+const filteredArgs = args.filter((arg) => !['--help', '-h', '--version', '-v'].includes(arg));
 
 // Launch the actual MCP server
 const serverPath = join(__dirname, '..', 'dist', 'index.js');
