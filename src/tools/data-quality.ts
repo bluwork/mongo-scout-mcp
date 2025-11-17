@@ -1349,6 +1349,420 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
       }
     }
   );
+
+  registerTool(
+    'exploreRelationships',
+    'Explore document relationships by following foreign key references in both directions. Useful for understanding data dependencies and debugging related entities.',
+    {
+      collection: z.string(),
+      documentId: z.string().optional(),
+      filter: z.record(z.any()).optional(),
+      relationships: z.array(z.object({
+        localField: z.string(),
+        foreignCollection: z.string(),
+        foreignField: z.string(),
+        as: z.string().optional(),
+      })),
+      options: z.object({
+        depth: z.number().int().min(1).max(5).optional(),
+        includeReverse: z.boolean().optional(),
+        limit: z.number().positive().max(100).optional(),
+      }).optional(),
+    },
+    async (args) => {
+      logToolUsage('exploreRelationships', args);
+      const { collection, documentId, filter, relationships, options = {} } = args;
+      const {
+        depth = 1,
+        includeReverse = false,
+        limit = 10,
+      } = options;
+
+      try {
+        // Validate that either documentId or filter is provided
+        if (!documentId && !filter) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  error: 'Either documentId or filter must be provided',
+                  suggestion: 'Use documentId for single document or filter for multiple documents',
+                }, null, 2),
+              },
+            ],
+          };
+        }
+
+        const collectionObj = db.collection(collection);
+        const startTime = Date.now();
+
+        // Build filter for root document(s)
+        let rootFilter: any;
+        if (documentId) {
+          rootFilter = { _id: preprocessQuery({ _id: documentId })._id };
+        } else {
+          rootFilter = preprocessQuery(filter!);
+        }
+
+        // Get root document(s)
+        const rootDocuments = await collectionObj.find(rootFilter).limit(limit).toArray();
+
+        if (rootDocuments.length === 0) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  collection,
+                  message: 'No documents found matching the criteria',
+                  suggestion: 'Check documentId or filter criteria',
+                }, null, 2),
+              },
+            ],
+          };
+        }
+
+        // Explore relationships for each root document
+        const results = [];
+        for (const rootDoc of rootDocuments) {
+          const explored = await exploreDocumentRelationships(
+            db,
+            collection,
+            rootDoc,
+            relationships,
+            depth,
+            includeReverse
+          );
+          results.push(explored);
+        }
+
+        const executionTimeMs = Date.now() - startTime;
+
+        // Generate statistics
+        const totalRelated = results.reduce((sum, r) => {
+          return sum + Object.keys(r.related || {}).reduce((s, key) => {
+            return s + (Array.isArray(r.related[key]) ? r.related[key].length : 1);
+          }, 0);
+        }, 0);
+
+        const totalReverse = includeReverse
+          ? results.reduce((sum, r) => {
+              return sum + Object.keys(r.reverseReferences || {}).reduce((s, key) => {
+                return s + (Array.isArray(r.reverseReferences[key]) ? r.reverseReferences[key].length : 0);
+              }, 0);
+            }, 0)
+          : 0;
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  collection,
+                  documentsExplored: results.length,
+                  statistics: {
+                    totalRelatedDocuments: totalRelated,
+                    totalReverseReferences: totalReverse,
+                    executionTimeMs,
+                  },
+                  results: results.length === 1 ? results[0] : results,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (error) {
+        logError('exploreRelationships', error, args);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Error exploring relationships: ${errorMessage}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  registerTool(
+    'validateDocuments',
+    'Validate documents against custom rules using MongoDB $expr conditions. Generic validation framework for any business logic or data consistency checks.',
+    {
+      collection: z.string(),
+      rules: z.array(z.object({
+        name: z.string(),
+        condition: z.record(z.any()),
+        message: z.string(),
+        severity: z.enum(['error', 'warning', 'info']).optional(),
+      })),
+      options: z.object({
+        filter: z.record(z.any()).optional(),
+        limit: z.number().positive().max(10000).optional(),
+        includeValid: z.boolean().optional(),
+        stopOnFirst: z.boolean().optional(),
+      }).optional(),
+    },
+    async (args) => {
+      logToolUsage('validateDocuments', args);
+      const { collection, rules, options = {} } = args;
+      const {
+        filter = {},
+        limit = 1000,
+        includeValid = false,
+        stopOnFirst = false,
+      } = options;
+
+      try {
+        const collectionObj = db.collection(collection);
+        const processedFilter = preprocessQuery(filter);
+        const startTime = Date.now();
+
+        const totalDocuments = await collectionObj.countDocuments(processedFilter);
+
+        if (totalDocuments === 0) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  collection,
+                  message: 'No documents found matching filter',
+                }, null, 2),
+              },
+            ],
+          };
+        }
+
+        const violations: any[] = [];
+        const validDocuments: any[] = [];
+        let documentsChecked = 0;
+
+        // Process each rule
+        for (const rule of rules) {
+          // Build aggregation to find violations
+          // A violation occurs when the condition is NOT met (i.e., condition evaluates to false)
+          const pipeline: any[] = [
+            { $match: processedFilter },
+            { $limit: limit },
+            {
+              $addFields: {
+                __validationResult: rule.condition,
+              },
+            },
+            {
+              $match: {
+                __validationResult: { $ne: true }, // Documents where condition is NOT true
+              },
+            },
+            {
+              $project: {
+                __validationResult: 0, // Remove the temp field
+              },
+            },
+          ];
+
+          const violatingDocs = await collectionObj.aggregate(pipeline).toArray();
+
+          if (violatingDocs.length > 0) {
+            violations.push({
+              rule: rule.name,
+              message: rule.message,
+              severity: rule.severity || 'error',
+              violationCount: violatingDocs.length,
+              samples: violatingDocs.slice(0, 5), // Show first 5 violations
+            });
+
+            if (stopOnFirst) {
+              break;
+            }
+          }
+
+          documentsChecked = Math.max(documentsChecked, violatingDocs.length);
+        }
+
+        // Optionally check for valid documents
+        if (includeValid && violations.length === 0) {
+          const sampleValid = await collectionObj.find(processedFilter).limit(3).toArray();
+          validDocuments.push(...sampleValid);
+        }
+
+        const executionTimeMs = Date.now() - startTime;
+
+        // Generate summary
+        const summary = {
+          collection,
+          totalDocuments,
+          documentsChecked: Math.min(limit, totalDocuments),
+          rulesChecked: rules.length,
+          totalViolations: violations.length,
+          violationsByRule: violations.reduce((acc: any, v: any) => {
+            acc[v.rule] = v.violationCount;
+            return acc;
+          }, {}),
+        };
+
+        // Generate recommendations
+        const recommendations: string[] = [];
+
+        if (violations.length === 0) {
+          recommendations.push('✓ All documents passed validation rules');
+        } else {
+          const errorCount = violations.filter((v: any) => v.severity === 'error').length;
+          const warningCount = violations.filter((v: any) => v.severity === 'warning').length;
+
+          if (errorCount > 0) {
+            recommendations.push(`⚠ Found ${errorCount} error-level validation failures`);
+          }
+          if (warningCount > 0) {
+            recommendations.push(`Found ${warningCount} warning-level validation issues`);
+          }
+
+          const totalViolatingDocs = violations.reduce((sum: number, v: any) => sum + v.violationCount, 0);
+          const violationPercentage = ((totalViolatingDocs / totalDocuments) * 100).toFixed(2);
+
+          if (parseFloat(violationPercentage) > 10) {
+            recommendations.push(
+              `High violation rate (${violationPercentage}%) - consider data migration or schema changes`
+            );
+          }
+
+          recommendations.push(
+            'Review samples and use updateMany with dryRun to preview fixes'
+          );
+        }
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  summary,
+                  violations,
+                  validSamples: includeValid ? validDocuments : undefined,
+                  recommendations,
+                  executionTimeMs,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (error) {
+        logError('validateDocuments', error, args);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Error validating documents: ${errorMessage}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+}
+
+// Helper function to explore document relationships recursively
+async function exploreDocumentRelationships(
+  db: Db,
+  rootCollection: string,
+  rootDoc: any,
+  relationships: Array<{
+    localField: string;
+    foreignCollection: string;
+    foreignField: string;
+    as?: string;
+  }>,
+  depth: number,
+  includeReverse: boolean,
+  visited: Set<string> = new Set()
+): Promise<any> {
+  const docKey = `${rootCollection}:${rootDoc._id}`;
+
+  // Prevent circular references
+  if (visited.has(docKey)) {
+    return { document: rootDoc, circular: true };
+  }
+  visited.add(docKey);
+
+  const result: any = {
+    document: rootDoc,
+    related: {},
+  };
+
+  // Follow forward relationships
+  for (const rel of relationships) {
+    const fieldValue = rootDoc[rel.localField];
+    if (!fieldValue) continue;
+
+    const alias = rel.as || rel.foreignCollection;
+    const foreignColl = db.collection(rel.foreignCollection);
+
+    // Handle arrays vs single values
+    const foreignIds = Array.isArray(fieldValue) ? fieldValue : [fieldValue];
+
+    const relatedDocs = await foreignColl
+      .find({ [rel.foreignField]: { $in: foreignIds } })
+      .limit(100)
+      .toArray();
+
+    if (relatedDocs.length > 0) {
+      // If depth > 1, recursively explore related documents
+      if (depth > 1) {
+        const explored = [];
+        for (const doc of relatedDocs) {
+          const nested = await exploreDocumentRelationships(
+            db,
+            rel.foreignCollection,
+            doc,
+            relationships,
+            depth - 1,
+            false, // Don't include reverse at nested levels
+            visited
+          );
+          explored.push(nested);
+        }
+        result.related[alias] = Array.isArray(fieldValue) ? explored : explored[0];
+      } else {
+        result.related[alias] = Array.isArray(fieldValue) ? relatedDocs : relatedDocs[0];
+      }
+    }
+  }
+
+  // Find reverse references (documents that reference this one)
+  if (includeReverse) {
+    result.reverseReferences = {};
+
+    for (const rel of relationships) {
+      const foreignColl = db.collection(rel.foreignCollection);
+
+      // Find documents in foreign collection that reference this document
+      const reverseFilter = {
+        [rel.localField]: rootDoc[rel.foreignField] || rootDoc._id,
+      };
+
+      const referencingDocs = await foreignColl
+        .find(reverseFilter)
+        .limit(50)
+        .toArray();
+
+      if (referencingDocs.length > 0) {
+        const alias = `${rel.foreignCollection}_referencing`;
+        result.reverseReferences[alias] = referencingDocs;
+      }
+    }
+  }
+
+  return result;
 }
 
 // Helper function to generate type consistency recommendations

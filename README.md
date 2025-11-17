@@ -162,6 +162,20 @@ Mongo Scout MCP provides comprehensive MongoDB tools with a focus on safety and 
 - **Duplicate Detection**: `findDuplicates` - Find duplicate documents based on field combinations
 - **Collection Cloning**: `cloneCollection` - Clone collections with filtering and index copying
 - **Data Export**: `exportCollection` - Export data to JSON, JSONL, or CSV formats
+- **Missing Fields**: `findMissingFields` - Check which documents are missing required fields
+- **Type Consistency**: `findInconsistentTypes` - Detect type inconsistencies across documents
+- **Field Renaming**: `renameField` - Rename fields with dry-run and index migration support
+- **Performance Analysis**: `analyzeQueryPerformance` - Query optimization using explain plans
+- **Orphan Detection**: `findOrphans` - Find orphaned references to maintain referential integrity
+
+### Relationship & Validation Tools (NEW in v1.3.0):
+- **Relationship Explorer**: `exploreRelationships` - Follow multi-hop relationships and discover document dependencies
+- **Custom Validation**: `validateDocuments` - Run custom business logic validation using MongoDB $expr conditions
+
+### Temporal Query Tools (NEW in v1.3.0):
+- **Recent Documents**: `findRecent` - Find documents within a time window (minutes, hours, days, weeks)
+- **Time Range Queries**: `findInTimeRange` - Query documents between dates with optional grouping
+- **Anomaly Detection**: `detectVolumeAnomalies` - Detect unusual activity patterns in document volume over time
 
 ### Monitoring Operations (available in both modes):
 - **Server Monitoring**: `getServerStatus`, `runAdminCommand`
@@ -272,6 +286,127 @@ exportCollection({
   options: {
     format: "jsonl",
     filter: { level: "error", date: { $gte: "2025-01-01" } }
+  }
+})
+```
+
+### Relationship Exploration (NEW):
+```
+// Explore document relationships following foreign keys
+exploreRelationships({
+  collection: "orders",
+  documentId: "507f1f77bcf86cd799439011",
+  relationships: [
+    {
+      localField: "vendorBillId",
+      foreignCollection: "vendor_bills",
+      foreignField: "_id",
+      as: "vendorBill"
+    },
+    {
+      localField: "siteId",
+      foreignCollection: "sites",
+      foreignField: "_id",
+      as: "site"
+    }
+  ],
+  options: {
+    depth: 2,           // Follow relationships 2 levels deep
+    includeReverse: true // Find docs that reference this one
+  }
+})
+
+// Find multiple documents with their relationships
+exploreRelationships({
+  collection: "users",
+  filter: { status: "active" },
+  relationships: [
+    {
+      localField: "companyId",
+      foreignCollection: "companies",
+      foreignField: "_id"
+    }
+  ],
+  options: { limit: 5 }
+})
+```
+
+### Custom Validation (NEW):
+```
+// Validate documents using custom MongoDB expressions
+validateDocuments({
+  collection: "orders",
+  rules: [
+    {
+      name: "total_matches_items",
+      condition: {
+        $expr: {
+          $eq: [
+            "$total",
+            { $sum: "$lineItems.price" }
+          ]
+        }
+      },
+      message: "Order total doesn't match sum of line items",
+      severity: "error"
+    },
+    {
+      name: "has_customer_info",
+      condition: {
+        $expr: {
+          $and: [
+            { $ne: ["$customerName", null] },
+            { $ne: ["$customerEmail", null] }
+          ]
+        }
+      },
+      message: "Missing required customer information",
+      severity: "warning"
+    }
+  ],
+  options: {
+    limit: 1000,
+    stopOnFirst: false  // Check all rules even if one fails
+  }
+})
+```
+
+### Temporal Queries (NEW):
+```
+// Find documents from the last 24 hours
+findRecent({
+  collection: "logs",
+  timestampField: "createdAt",
+  timeWindow: {
+    value: 24,
+    unit: "hours"
+  },
+  options: {
+    filter: { level: "error" },
+    limit: 50
+  }
+})
+
+// Find documents in a specific date range with grouping
+findInTimeRange({
+  collection: "orders",
+  timestampField: "createdAt",
+  startDate: "2025-01-01T00:00:00Z",
+  endDate: "2025-01-31T23:59:59Z",
+  options: {
+    groupBy: "day",  // Group results by day
+    filter: { status: "completed" }
+  }
+})
+
+// Detect unusual volume patterns
+detectVolumeAnomalies({
+  collection: "orders",
+  timestampField: "createdAt",
+  options: {
+    groupBy: "day",
+    lookbackPeriods: 30,  // Analyze last 30 days
+    threshold: 2.0        // 2 standard deviations
   }
 })
 ```
