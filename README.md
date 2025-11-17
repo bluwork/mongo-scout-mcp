@@ -4,42 +4,25 @@ Scout your MongoDB databases with AI - A production-ready Model Context Protocol
 
 ## Setup
 
-Install dependencies:
-
+1. **Clone the repository**:
+```bash
+git clone https://github.com/yourusername/mongo-scout-mcp.git
+cd mongo-scout-mcp
 ```
+
+2. **Install dependencies**:
+```bash
 pnpm install
 ```
 
-## Running the server
-
-Build and run:
-
-```
+3. **Build the project**:
+```bash
 pnpm build
-pnpm start
 ```
 
-Development mode (no build required):
+## Configuration
 
-```
-pnpm dev
-```
-
-Watch mode (auto-restart on file changes):
-
-```
-pnpm watch
-```
-
-## Command Line Usage
-
-```
-mongo-scout-mcp [options] [mongodb-uri] [database-name]
-# or use the shorter alias:
-mongo-scout [options] [mongodb-uri] [database-name]
-```
-
-### Server Modes
+### Claude Desktop Setup (Recommended)
 
 ⚠️ **IMPORTANT SECURITY NOTICE**
 
@@ -54,7 +37,48 @@ The server supports two modes with **read-only as the default** for safety:
   - ⚠️ **WARNING**: AI assistants can modify, delete, or drop data
   - ⚠️ **WARNING**: Use only when you explicitly need write operations
   - ⚠️ **WARNING**: Consider using on non-production databases
-  - Must be explicitly enabled via command line flag or environment variable
+  - Must be explicitly enabled via command line flag
+
+### Recommended Setup: Separate MCP Instances
+
+Configure **two separate MCP server instances** in your Claude Desktop config for maximum safety:
+
+**~/.config/claude-desktop/config.json** (Linux/Mac) or **%APPDATA%\Claude\config.json** (Windows):
+
+```json
+{
+  "mcpServers": {
+    "mongo-scout-readonly": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/mongo-scout-mcp/dist/index.js",
+        "--read-only",
+        "mongodb://localhost:27017",
+        "mydb"
+      ],
+      "type": "stdio"
+    },
+    "mongo-scout-readwrite": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/mongo-scout-mcp/dist/index.js",
+        "--read-write",
+        "mongodb://localhost:27017",
+        "mydb_dev"
+      ],
+      "type": "stdio"
+    }
+  }
+}
+```
+
+**Important**: Replace `/absolute/path/to/mongo-scout-mcp` with the actual absolute path where you cloned the repository.
+
+This approach gives you:
+- **mongo-scout-readonly**: Safe exploration without risk of data modification
+- **mongo-scout-readwrite**: Write operations available when explicitly needed
+- Clear separation of capabilities - AI assistants will see them as different tools
+- Option to point read-write to a development database for extra safety
 
 ### Command Line Options
 
@@ -64,48 +88,23 @@ The server supports two modes with **read-only as the default** for safety:
 --mode <mode>        Set mode: 'read-only' or 'read-write'
 ```
 
-### Examples
+### Standalone Usage (for testing)
+
+You can also run the server directly from the command line:
 
 ```bash
 # Default read-only mode (safest)
-mongo-scout-mcp
+node dist/index.js
 
 # Explicitly enable read-write mode (use with caution)
-mongo-scout-mcp --read-write
+node dist/index.js --read-write
 
 # With custom URI and database in read-only mode
-mongo-scout mongodb://localhost:27017 mydb
+node dist/index.js mongodb://localhost:27017 mydb
 
 # Read-write mode with custom connection
-mongo-scout --read-write mongodb://localhost:27017 mydb
+node dist/index.js --read-write mongodb://localhost:27017 mydb
 ```
-
-### Recommended Setup: Separate MCP Instances
-
-The best practice is to configure **two separate MCP server instances** in your Claude Desktop config:
-
-**~/.config/claude-desktop/config.json** (Linux/Mac) or **%APPDATA%\Claude\config.json** (Windows):
-
-```json
-{
-  "mcpServers": {
-    "mongo-scout-readonly": {
-      "command": "mongo-scout",
-      "args": ["--read-only", "mongodb://localhost:27017", "mydb"]
-    },
-    "mongo-scout-readwrite": {
-      "command": "mongo-scout",
-      "args": ["--read-write", "mongodb://localhost:27017", "mydb_dev"]
-    }
-  }
-}
-```
-
-This approach gives you:
-- **mongo-scout-readonly**: Safe exploration without risk of data modification
-- **mongo-scout-readwrite**: Write operations available when explicitly needed
-- Clear separation of capabilities - AI assistants will see them as different tools
-- Option to point read-write to a development database for extra safety
 
 ## Logging and Debugging
 
