@@ -6,7 +6,7 @@ Scout your MongoDB databases with AI - A production-ready Model Context Protocol
 
 1. **Clone the repository**:
 ```bash
-git clone https://github.com/yourusername/mongo-scout-mcp.git
+git clone https://github.com/bluwork/mongo-scout-mcp.git
 cd mongo-scout-mcp
 ```
 
