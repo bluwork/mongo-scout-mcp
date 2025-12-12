@@ -1385,7 +1385,23 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
         // Build filter for root document(s)
         let rootFilter: any;
         if (documentId) {
-          rootFilter = { _id: preprocessQuery({ _id: documentId })._id };
+          // First try preprocessQuery which handles ObjectIds
+          const processedId = preprocessQuery({ _id: documentId })._id;
+
+          // If preprocessQuery didn't convert it (not an ObjectId), handle multiple _id types
+          // This supports collections with numeric or string _id fields
+          if (processedId === documentId) {
+            const numericId = Number(documentId);
+            if (!isNaN(numericId) && Number.isFinite(numericId)) {
+              // Try both numeric and string _id with $or to handle both cases
+              rootFilter = { $or: [{ _id: numericId }, { _id: documentId }] };
+            } else {
+              rootFilter = { _id: documentId };
+            }
+          } else {
+            // preprocessQuery converted it (ObjectId case)
+            rootFilter = { _id: processedId };
+          }
         } else {
           rootFilter = preprocessQuery(filter!);
         }
@@ -1532,25 +1548,44 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
         for (const rule of rules) {
           // Build aggregation to find violations
           // A violation occurs when the condition is NOT met (i.e., condition evaluates to false)
-          const pipeline: any[] = [
-            { $match: processedFilter },
-            { $limit: limit },
-            {
-              $addFields: {
-                __validationResult: rule.condition,
+
+          // If rule.condition contains $expr, we need to negate it in $match
+          // Otherwise, use it in $addFields with $cond
+          let pipeline: any[];
+
+          if (rule.condition.$expr) {
+            // Direct $expr case - use negation in $match
+            pipeline = [
+              { $match: processedFilter },
+              { $limit: limit },
+              {
+                $match: {
+                  $expr: { $not: rule.condition.$expr }, // Negate the expression
+                },
               },
-            },
-            {
-              $match: {
-                __validationResult: { $ne: true }, // Documents where condition is NOT true
+            ];
+          } else {
+            // Regular condition - use $addFields approach
+            pipeline = [
+              { $match: processedFilter },
+              { $limit: limit },
+              {
+                $addFields: {
+                  __validationResult: rule.condition,
+                },
               },
-            },
-            {
-              $project: {
-                __validationResult: 0, // Remove the temp field
+              {
+                $match: {
+                  __validationResult: { $ne: true }, // Documents where condition is NOT true
+                },
               },
-            },
-          ];
+              {
+                $project: {
+                  __validationResult: 0, // Remove the temp field
+                },
+              },
+            ];
+          }
 
           const violatingDocs = await collectionObj.aggregate(pipeline).toArray();
 
