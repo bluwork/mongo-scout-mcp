@@ -141,6 +141,38 @@ tail -f logs/error.log
 
 This will show you live updates as external AIs interact with your server.
 
+## ObjectId Format Support
+
+Mongo Scout MCP supports MongoDB's Extended JSON format for ObjectId fields, ensuring proper interoperability with AI agents and tools.
+
+### Query Input
+Both formats are accepted for ObjectId fields (`_id`, fields ending in `Id`, etc.):
+
+```javascript
+// Extended JSON format (recommended for AI agents)
+{ "_id": { "$oid": "507f1f77bcf86cd799439011" } }
+
+// Plain string format (also supported)
+{ "_id": "507f1f77bcf86cd799439011" }
+```
+
+### Response Output
+All ObjectId values in responses are returned in Extended JSON format:
+
+```json
+{
+  "_id": { "$oid": "507f1f77bcf86cd799439011" },
+  "userId": { "$oid": "507f1f77bcf86cd799439012" },
+  "createdAt": "2025-01-15T10:30:00.000Z"
+}
+```
+
+This ensures:
+- AI agents can distinguish ObjectId fields from plain strings
+- Type information is preserved for subsequent queries
+- Compatible with MongoDB's official Extended JSON specification
+- Other BSON types (Date, Decimal128, etc.) serialize correctly
+
 ## Available Tools
 
 Mongo Scout MCP provides comprehensive MongoDB tools with a focus on safety and data quality:
