@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { logToolUsage, logError } from '../utils/logger.js';
 import { preprocessQuery } from '../utils/query-preprocessor.js';
 import { shouldBlockFilter, validateFilter, getOperationWarning } from '../utils/filter-validator.js';
+import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
 
 export function registerDocumentTools(server: McpServer, db: Db, mode: string): void {
   const registerTool = (toolName: string, description: string, schema: any, handler: (args?: any) => any, writeOperation = false) => {
@@ -48,23 +49,21 @@ export function registerDocumentTools(server: McpServer, db: Db, mode: string): 
 
         const total = await db.collection(collection).countDocuments(processedQuery);
 
+        const response = {
+          documents: docs,
+          metadata: {
+            total,
+            limit,
+            skip,
+            hasMore: total > skip + docs.length,
+          },
+        };
+
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(
-                {
-                  documents: docs,
-                  metadata: {
-                    total,
-                    limit,
-                    skip,
-                    hasMore: total > skip + docs.length,
-                  },
-                },
-                null,
-                2,
-              ),
+              text: JSON.stringify(convertObjectIdsToExtendedJson(response), null, 2),
             },
           ],
         };
@@ -100,7 +99,7 @@ export function registerDocumentTools(server: McpServer, db: Db, mode: string): 
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result, null, 2),
+              text: JSON.stringify(convertObjectIdsToExtendedJson(result), null, 2),
             },
           ],
         };
@@ -173,7 +172,7 @@ export function registerDocumentTools(server: McpServer, db: Db, mode: string): 
           content: [
             {
               type: 'text',
-              text: JSON.stringify(values, null, 2),
+              text: JSON.stringify(convertObjectIdsToExtendedJson(values), null, 2),
             },
           ],
         };
@@ -213,17 +212,19 @@ export function registerDocumentTools(server: McpServer, db: Db, mode: string): 
 
         const smartWarning = getOperationWarning(matchCount, 'update');
 
+        const response = {
+          willAffect: matchCount,
+          sampleDocuments: sampleDocs,
+          samplesShown: sampleDocs.length,
+          message: smartWarning || (matchCount <= 10 ? `✓ Will update ${matchCount} document${matchCount !== 1 ? 's' : ''}` : undefined),
+          filterWarning: validation.warning,
+        };
+
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({
-                willAffect: matchCount,
-                sampleDocuments: sampleDocs,
-                samplesShown: sampleDocs.length,
-                message: smartWarning || (matchCount <= 10 ? `✓ Will update ${matchCount} document${matchCount !== 1 ? 's' : ''}` : undefined),
-                filterWarning: validation.warning,
-              }, null, 2),
+              text: JSON.stringify(convertObjectIdsToExtendedJson(response), null, 2),
             },
           ],
         };
@@ -262,17 +263,19 @@ export function registerDocumentTools(server: McpServer, db: Db, mode: string): 
 
         const smartWarning = getOperationWarning(deleteCount, 'delete');
 
+        const response = {
+          willDelete: deleteCount,
+          sampleDocuments: sampleDocs,
+          samplesShown: sampleDocs.length,
+          message: smartWarning || (deleteCount <= 10 ? `✓ Will delete ${deleteCount} document${deleteCount !== 1 ? 's' : ''}` : undefined),
+          filterWarning: validation.warning,
+        };
+
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({
-                willDelete: deleteCount,
-                sampleDocuments: sampleDocs,
-                samplesShown: sampleDocs.length,
-                message: smartWarning || (deleteCount <= 10 ? `✓ Will delete ${deleteCount} document${deleteCount !== 1 ? 's' : ''}` : undefined),
-                filterWarning: validation.warning,
-              }, null, 2),
+              text: JSON.stringify(convertObjectIdsToExtendedJson(response), null, 2),
             },
           ],
         };
@@ -464,19 +467,21 @@ Or increase maxDocuments limit if this is intentional`,
           const sampleDocs = await db.collection(collection).find(processedFilter).limit(3).toArray();
           const smartWarning = getOperationWarning(matchCount, 'update');
 
+          const response = {
+            dryRun: true,
+            operation: 'updateMany',
+            collection,
+            wouldMatch: matchCount,
+            sampleDocuments: sampleDocs,
+            updateOperation: update,
+            message: smartWarning
+          };
+
           return {
             content: [
               {
                 type: 'text',
-                text: JSON.stringify({
-                  dryRun: true,
-                  operation: 'updateMany',
-                  collection,
-                  wouldMatch: matchCount,
-                  sampleDocuments: sampleDocs,
-                  updateOperation: update,
-                  message: smartWarning
-                }, null, 2),
+                text: JSON.stringify(convertObjectIdsToExtendedJson(response), null, 2),
               },
             ],
           };
@@ -594,7 +599,7 @@ Or increase maxDocuments limit if this is intentional`,
             content: [
               {
                 type: 'text',
-                text: JSON.stringify(result, null, 2),
+                text: JSON.stringify(convertObjectIdsToExtendedJson(result), null, 2),
               },
             ],
           };
@@ -717,18 +722,20 @@ Or increase maxDocuments limit if this is intentional`,
           const sampleDocs = await db.collection(collection).find(processedFilter).limit(3).toArray();
           const smartWarning = getOperationWarning(deleteCount, 'delete');
 
+          const response = {
+            dryRun: true,
+            operation: 'deleteMany',
+            collection,
+            wouldDelete: deleteCount,
+            sampleDocuments: sampleDocs,
+            message: smartWarning
+          };
+
           return {
             content: [
               {
                 type: 'text',
-                text: JSON.stringify({
-                  dryRun: true,
-                  operation: 'deleteMany',
-                  collection,
-                  wouldDelete: deleteCount,
-                  sampleDocuments: sampleDocs,
-                  message: smartWarning
-                }, null, 2),
+                text: JSON.stringify(convertObjectIdsToExtendedJson(response), null, 2),
               },
             ],
           };

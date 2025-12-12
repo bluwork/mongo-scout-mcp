@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { logToolUsage, logError } from '../utils/logger.js';
 import { preprocessQuery } from '../utils/query-preprocessor.js';
+import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
 
 export function registerTemporalTools(server: McpServer, db: Db, mode: string): void {
   const registerTool = (toolName: string, description: string, schema: any, handler: (args?: any) => any, writeOperation = false) => {
@@ -88,24 +89,22 @@ export function registerTemporalTools(server: McpServer, db: Db, mode: string): 
         const documents = await cursor.toArray();
         const totalCount = await collectionObj.countDocuments(timeQuery);
 
+        const response = {
+          collection,
+          timestampField,
+          timeWindow: `Last ${timeWindow.value} ${timeWindow.unit}`,
+          threshold: threshold.toISOString(),
+          documentsFound: documents.length,
+          totalMatching: totalCount,
+          hasMore: totalCount > documents.length,
+          documents,
+        };
+
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(
-                {
-                  collection,
-                  timestampField,
-                  timeWindow: `Last ${timeWindow.value} ${timeWindow.unit}`,
-                  threshold: threshold.toISOString(),
-                  documentsFound: documents.length,
-                  totalMatching: totalCount,
-                  hasMore: totalCount > documents.length,
-                  documents,
-                },
-                null,
-                2
-              ),
+              text: JSON.stringify(convertObjectIdsToExtendedJson(response), null, 2),
             },
           ],
         };
@@ -161,10 +160,10 @@ export function registerTemporalTools(server: McpServer, db: Db, mode: string): 
             content: [
               {
                 type: 'text',
-                text: JSON.stringify({
+                text: JSON.stringify(convertObjectIdsToExtendedJson({
                   error: 'Invalid date format',
                   suggestion: 'Use ISO 8601 format (e.g., "2025-01-15T00:00:00Z")',
-                }, null, 2),
+                }), null, 2),
               },
             ],
           };
@@ -250,8 +249,7 @@ export function registerTemporalTools(server: McpServer, db: Db, mode: string): 
           content: [
             {
               type: 'text',
-              text: JSON.stringify(
-                {
+              text: JSON.stringify(convertObjectIdsToExtendedJson({
                   collection,
                   timestampField,
                   startDate: start.toISOString(),
@@ -260,10 +258,7 @@ export function registerTemporalTools(server: McpServer, db: Db, mode: string): 
                   totalMatching: totalCount,
                   hasMore: totalCount > documents.length,
                   documents,
-                },
-                null,
-                2
-              ),
+                }), null, 2),
             },
           ],
         };
@@ -360,10 +355,10 @@ export function registerTemporalTools(server: McpServer, db: Db, mode: string): 
             content: [
               {
                 type: 'text',
-                text: JSON.stringify({
+                text: JSON.stringify(convertObjectIdsToExtendedJson({
                   collection,
                   message: 'No data found in lookback period',
-                }, null, 2),
+                }), null, 2),
               },
             ],
           };

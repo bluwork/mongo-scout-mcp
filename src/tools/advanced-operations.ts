@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { logToolUsage, logError } from '../utils/logger.js';
 import { preprocessQuery } from '../utils/query-preprocessor.js';
+import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
 
 export function registerAdvancedOperations(server: McpServer, db: Db, mode: string): void {
   const registerTool = (toolName: string, description: string, schema: any, handler: (args?: any) => any, writeOperation = false) => {
@@ -65,14 +66,14 @@ export function registerAdvancedOperations(server: McpServer, db: Db, mode: stri
           content: [
             {
               type: 'text',
-              text: JSON.stringify({
+              text: JSON.stringify(convertObjectIdsToExtendedJson({
                 preview: true,
                 collection,
                 totalOperations: totalOps,
                 breakdown: operationsSummary,
                 sampleOperations: samples,
                 message: warning
-              }, null, 2),
+              }), null, 2),
             },
           ],
         };
@@ -129,7 +130,7 @@ export function registerAdvancedOperations(server: McpServer, db: Db, mode: stri
             content: [
               {
                 type: 'text',
-                text: JSON.stringify({
+                text: JSON.stringify(convertObjectIdsToExtendedJson({
                   dryRun: true,
                   operation: 'bulkWrite',
                   collection,
@@ -137,7 +138,7 @@ export function registerAdvancedOperations(server: McpServer, db: Db, mode: stri
                   breakdown: operationsSummary,
                   ordered: options.ordered ?? true,
                   warning: operations.length > 100 ? '⚠ Large bulk operation detected' : undefined
-                }, null, 2),
+                }), null, 2),
               },
             ],
           };
@@ -155,14 +156,14 @@ export function registerAdvancedOperations(server: McpServer, db: Db, mode: stri
           content: [
             {
               type: 'text',
-              text: JSON.stringify({
+              text: JSON.stringify(convertObjectIdsToExtendedJson({
                 insertedCount: result.insertedCount,
                 matchedCount: result.matchedCount,
                 modifiedCount: result.modifiedCount,
                 deletedCount: result.deletedCount,
                 upsertedCount: result.upsertedCount,
                 upsertedIds: result.upsertedIds,
-              }, null, 2) + warningText,
+              }), null, 2) + warningText,
             },
           ],
         };
@@ -241,7 +242,7 @@ export function registerAdvancedOperations(server: McpServer, db: Db, mode: stri
           content: [
             {
               type: 'text',
-              text: JSON.stringify(explainResult, null, 2),
+              text: JSON.stringify(convertObjectIdsToExtendedJson(explainResult), null, 2),
             },
           ],
         };
@@ -290,7 +291,7 @@ export function registerAdvancedOperations(server: McpServer, db: Db, mode: stri
           content: [
             {
               type: 'text',
-              text: JSON.stringify(results, null, 2),
+              text: JSON.stringify(convertObjectIdsToExtendedJson(results), null, 2),
             },
           ],
         };
