@@ -1382,24 +1382,18 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
         const collectionObj = db.collection(collection);
         const startTime = Date.now();
 
-        // Build filter for root document(s)
         let rootFilter: any;
         if (documentId) {
-          // First try preprocessQuery which handles ObjectIds
           const processedId = preprocessQuery({ _id: documentId })._id;
 
-          // If preprocessQuery didn't convert it (not an ObjectId), handle multiple _id types
-          // This supports collections with numeric or string _id fields
           if (processedId === documentId) {
             const numericId = Number(documentId);
             if (!isNaN(numericId) && Number.isFinite(numericId)) {
-              // Try both numeric and string _id with $or to handle both cases
               rootFilter = { $or: [{ _id: numericId }, { _id: documentId }] };
             } else {
               rootFilter = { _id: documentId };
             }
           } else {
-            // preprocessQuery converted it (ObjectId case)
             rootFilter = { _id: processedId };
           }
         } else {
@@ -1544,28 +1538,20 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
         const validDocuments: any[] = [];
         let documentsChecked = 0;
 
-        // Process each rule
         for (const rule of rules) {
-          // Build aggregation to find violations
-          // A violation occurs when the condition is NOT met (i.e., condition evaluates to false)
-
-          // If rule.condition contains $expr, we need to negate it in $match
-          // Otherwise, use it in $addFields with $cond
           let pipeline: any[];
 
           if (rule.condition.$expr) {
-            // Direct $expr case - use negation in $match
             pipeline = [
               { $match: processedFilter },
               { $limit: limit },
               {
                 $match: {
-                  $expr: { $not: rule.condition.$expr }, // Negate the expression
+                  $expr: { $not: rule.condition.$expr },
                 },
               },
             ];
           } else {
-            // Regular condition - use $addFields approach
             pipeline = [
               { $match: processedFilter },
               { $limit: limit },
@@ -1576,12 +1562,12 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
               },
               {
                 $match: {
-                  __validationResult: { $ne: true }, // Documents where condition is NOT true
+                  __validationResult: { $ne: true },
                 },
               },
               {
                 $project: {
-                  __validationResult: 0, // Remove the temp field
+                  __validationResult: 0,
                 },
               },
             ];
