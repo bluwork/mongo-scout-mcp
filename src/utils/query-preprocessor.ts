@@ -13,9 +13,22 @@ function isObjectIdField(fieldName: string): boolean {
   return objectIdPatterns.some(pattern => pattern.test(fieldName));
 }
 
+function isExtendedJsonObjectId(value: unknown): value is { $oid: string } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    '$oid' in value &&
+    typeof (value as { $oid: unknown }).$oid === 'string'
+  );
+}
+
 function preprocessQueryValue(value: unknown, fieldName?: string): unknown {
   if (!value || typeof value !== 'object') {
     return value;
+  }
+
+  if (isExtendedJsonObjectId(value)) {
+    return new ObjectId(value.$oid);
   }
 
   const processed: Record<string, unknown> = {};
@@ -25,11 +38,16 @@ function preprocessQueryValue(value: unknown, fieldName?: string): unknown {
     if (operator.startsWith('$')) {
       if (Array.isArray(operatorValue)) {
         processed[operator] = operatorValue.map(item => {
+          if (isExtendedJsonObjectId(item)) {
+            return new ObjectId(item.$oid);
+          }
           if (isObjectIdFieldName && typeof item === 'string' && ObjectId.isValid(item)) {
             return new ObjectId(item);
           }
           return item;
         });
+      } else if (isExtendedJsonObjectId(operatorValue)) {
+        processed[operator] = new ObjectId(operatorValue.$oid);
       } else if (isObjectIdFieldName && typeof operatorValue === 'string' && ObjectId.isValid(operatorValue)) {
         processed[operator] = new ObjectId(operatorValue);
       } else {
@@ -52,7 +70,9 @@ export function preprocessQuery(query: MongoQuery): MongoFilter {
 
   for (const [key, value] of Object.entries(query)) {
     if (isObjectIdField(key)) {
-      if (typeof value === 'string' && ObjectId.isValid(value)) {
+      if (isExtendedJsonObjectId(value)) {
+        processed[key] = new ObjectId(value.$oid);
+      } else if (typeof value === 'string' && ObjectId.isValid(value)) {
         processed[key] = new ObjectId(value);
       } else if (typeof value === 'object' && value !== null) {
         processed[key] = preprocessQueryValue(value, key);
@@ -63,6 +83,9 @@ export function preprocessQuery(query: MongoQuery): MongoFilter {
       processed[key] = preprocessQuery(value as MongoQuery);
     } else if (Array.isArray(value)) {
       processed[key] = value.map(item => {
+        if (isExtendedJsonObjectId(item)) {
+          return new ObjectId(item.$oid);
+        }
         if (isObjectIdField(key) && typeof item === 'string' && ObjectId.isValid(item)) {
           return new ObjectId(item);
         }

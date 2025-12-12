@@ -4,6 +4,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { logToolUsage, logError } from '../utils/logger.js';
 import type { MongoDocument } from '../types.js';
+import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
 
 export function registerSchemaTools(server: McpServer, db: Db): void {
   server.tool(
@@ -70,7 +71,7 @@ export function registerSchemaTools(server: McpServer, db: Db): void {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(schema, null, 2),
+              text: JSON.stringify(convertObjectIdsToExtendedJson(schema), null, 2),
             },
           ],
         };

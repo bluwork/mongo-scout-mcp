@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { logToolUsage, logError } from '../utils/logger.js';
 import { preprocessQuery } from '../utils/query-preprocessor.js';
+import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
 
 export function registerDataQualityTools(server: McpServer, db: Db, mode: string): void {
   const registerTool = (toolName: string, description: string, schema: any, handler: (args?: any) => any, writeOperation = false) => {
@@ -420,11 +421,11 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
             content: [
               {
                 type: 'text',
-                text: JSON.stringify({
+                text: JSON.stringify(convertObjectIdsToExtendedJson({
                   documentsExported: 0,
                   message: 'No documents match filter',
                   suggestion: 'Check filter criteria or use find() to verify data exists',
-                }, null, 2),
+                }), null, 2),
               },
             ],
           };
@@ -437,7 +438,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
         switch (format) {
           case 'json': {
             data = pretty
-              ? JSON.stringify(documents, null, 2)
+              ? JSON.stringify(convertObjectIdsToExtendedJson(documents), null, 2)
               : JSON.stringify(documents);
             sizeBytes = Buffer.byteLength(data, 'utf8');
             break;
@@ -537,7 +538,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result, null, 2),
+              text: JSON.stringify(convertObjectIdsToExtendedJson(result), null, 2),
             },
           ],
         };
@@ -587,10 +588,10 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
             content: [
               {
                 type: 'text',
-                text: JSON.stringify({
+                text: JSON.stringify(convertObjectIdsToExtendedJson({
                   collection,
                   message: 'No documents found matching filter',
-                }, null, 2),
+                }), null, 2),
               },
             ],
           };
@@ -659,8 +660,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
           content: [
             {
               type: 'text',
-              text: JSON.stringify(
-                {
+              text: JSON.stringify(convertObjectIdsToExtendedJson({
                   collection,
                   totalDocuments,
                   requiredFields,
@@ -669,10 +669,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
                   documentsComplete,
                   completionRate,
                   recommendations,
-                },
-                null,
-                2
-              ),
+                }), null, 2),
             },
           ],
         };
@@ -770,11 +767,11 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
             content: [
               {
                 type: 'text',
-                text: JSON.stringify({
+                text: JSON.stringify(convertObjectIdsToExtendedJson({
                   collection,
                   field,
                   message: 'No documents found matching filter',
-                }, null, 2),
+                }), null, 2),
               },
             ],
           };
@@ -815,8 +812,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
           content: [
             {
               type: 'text',
-              text: JSON.stringify(
-                {
+              text: JSON.stringify(convertObjectIdsToExtendedJson({
                   collection,
                   field,
                   totalDocuments,
@@ -824,10 +820,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
                   types,
                   dominantType,
                   recommendations,
-                },
-                null,
-                2
-              ),
+                }), null, 2),
             },
           ],
         };
@@ -915,8 +908,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
             content: [
               {
                 type: 'text',
-                text: JSON.stringify(
-                  {
+                text: JSON.stringify(convertObjectIdsToExtendedJson({
                     dryRun: true,
                     collection,
                     oldFieldName,
@@ -924,10 +916,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
                     documentsAffected: affectedCount,
                     samples: beforeAfter,
                     estimatedTimeMs: Math.ceil(affectedCount / 1000) * 100,
-                  },
-                  null,
-                  2
-                ),
+                  }), null, 2),
               },
             ],
           };
@@ -1013,8 +1002,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
           content: [
             {
               type: 'text',
-              text: JSON.stringify(
-                {
+              text: JSON.stringify(convertObjectIdsToExtendedJson({
                   collection,
                   oldFieldName,
                   newFieldName,
@@ -1022,10 +1010,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
                   indexesUpdated,
                   executionTimeMs,
                   warnings: warnings.length > 0 ? warnings : undefined,
-                },
-                null,
-                2
-              ),
+                }), null, 2),
             },
           ],
         };
@@ -1159,7 +1144,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
           content: [
             {
               type: 'text',
-              text: JSON.stringify(analysis, null, 2),
+              text: JSON.stringify(convertObjectIdsToExtendedJson(analysis), null, 2),
             },
           ],
         };
@@ -1385,10 +1370,10 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
             content: [
               {
                 type: 'text',
-                text: JSON.stringify({
+                text: JSON.stringify(convertObjectIdsToExtendedJson({
                   error: 'Either documentId or filter must be provided',
                   suggestion: 'Use documentId for single document or filter for multiple documents',
-                }, null, 2),
+                }), null, 2),
               },
             ],
           };
@@ -1413,11 +1398,11 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
             content: [
               {
                 type: 'text',
-                text: JSON.stringify({
+                text: JSON.stringify(convertObjectIdsToExtendedJson({
                   collection,
                   message: 'No documents found matching the criteria',
                   suggestion: 'Check documentId or filter criteria',
-                }, null, 2),
+                }), null, 2),
               },
             ],
           };
@@ -1530,10 +1515,10 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
             content: [
               {
                 type: 'text',
-                text: JSON.stringify({
+                text: JSON.stringify(convertObjectIdsToExtendedJson({
                   collection,
                   message: 'No documents found matching filter',
-                }, null, 2),
+                }), null, 2),
               },
             ],
           };
@@ -1641,17 +1626,13 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
           content: [
             {
               type: 'text',
-              text: JSON.stringify(
-                {
+              text: JSON.stringify(convertObjectIdsToExtendedJson({
                   summary,
                   violations,
                   validSamples: includeValid ? validDocuments : undefined,
                   recommendations,
                   executionTimeMs,
-                },
-                null,
-                2
-              ),
+                }), null, 2),
             },
           ],
         };
