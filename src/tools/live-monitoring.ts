@@ -420,7 +420,7 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
 
   registerTool(
     'getSlowestOperations',
-    'Get slow operations from both profiler and currently running operations. Use includeQueryDetails=false for token efficiency.',
+    'Get slow operations from both profiler and currently running operations. Use includeQueryDetails=false for token efficiency. Note: Enabling profiling requires read-write mode.',
     {
       minDuration: z.number().min(0).optional(),
       limit: z.number().positive().optional(),
@@ -450,14 +450,20 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
           result.profilingStatus = profileStatus;
 
           if (profileStatus.was === 0) {
-            try {
-              originalProfilingLevel = profileStatus.was;
-              originalSlowMs = profileStatus.slowms ?? 100;
-              await db.command({ profile: 1, slowms: minDuration });
-              result.profilingStatus = { was: 1, slowms: minDuration, enabled: 'temporarily', ok: 1 };
-            } catch (e) {
+            if (mode === 'read-write') {
+              try {
+                originalProfilingLevel = profileStatus.was;
+                originalSlowMs = profileStatus.slowms ?? 100;
+                await db.command({ profile: 1, slowms: minDuration });
+                result.profilingStatus = { was: 1, slowms: minDuration, enabled: 'temporarily', ok: 1 };
+              } catch (e) {
+                if (result.profilingStatus && 'was' in result.profilingStatus) {
+                  result.profilingStatus.message = 'Profiling is disabled and could not be enabled automatically';
+                }
+              }
+            } else {
               if (result.profilingStatus && 'was' in result.profilingStatus) {
-                result.profilingStatus.message = 'Profiling is disabled and could not be enabled automatically';
+                result.profilingStatus.message = 'Profiling is disabled. Enable it manually or use read-write mode to auto-enable.';
               }
             }
           }

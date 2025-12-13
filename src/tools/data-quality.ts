@@ -437,29 +437,30 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
 
         switch (format) {
           case 'json': {
+            const convertedDocs = convertObjectIdsToExtendedJson(documents);
             data = pretty
-              ? JSON.stringify(convertObjectIdsToExtendedJson(documents), null, 2)
-              : JSON.stringify(documents);
+              ? JSON.stringify(convertedDocs, null, 2)
+              : JSON.stringify(convertedDocs);
             sizeBytes = Buffer.byteLength(data, 'utf8');
             break;
           }
 
           case 'jsonl': {
-            data = documents.map(doc => JSON.stringify(doc)).join('\n');
+            data = documents.map(doc => JSON.stringify(convertObjectIdsToExtendedJson(doc))).join('\n');
             sizeBytes = Buffer.byteLength(data, 'utf8');
             break;
           }
 
           case 'csv': {
-            // Flatten nested objects if requested
+            const convertedDocs = documents.map(doc => convertObjectIdsToExtendedJson(doc) as Record<string, any>);
             const processedDocs = flatten
-              ? documents.map(doc => flattenObject(doc))
-              : documents;
+              ? convertedDocs.map(doc => flattenObject(doc))
+              : convertedDocs;
 
             // Get all unique headers
             const headersSet = new Set<string>();
             processedDocs.forEach(doc => {
-              Object.keys(doc).forEach(key => headersSet.add(key));
+              Object.keys(doc as any).forEach(key => headersSet.add(key));
             });
             const headers = Array.from(headersSet);
 
@@ -469,7 +470,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
 
             for (const doc of processedDocs) {
               const row = headers.map(header => {
-                const value = doc[header];
+                const value = (doc as any)[header];
 
                 if (value === null || value === undefined) {
                   return '';
