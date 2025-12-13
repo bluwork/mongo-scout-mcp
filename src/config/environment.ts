@@ -21,6 +21,14 @@ export function parseArgs(): AppConfig {
     }
   }
 
+  const normalizedMode = mode.toLowerCase().trim();
+  if (normalizedMode !== 'read-only' && normalizedMode !== 'read-write') {
+    console.error(`Invalid mode "${mode}". Must be "read-only" or "read-write". Defaulting to read-only for safety.`);
+    mode = 'read-only';
+  } else {
+    mode = normalizedMode;
+  }
+
   uri = uri || 'mongodb://localhost:27017';
   dbName = dbName || 'test';
 
