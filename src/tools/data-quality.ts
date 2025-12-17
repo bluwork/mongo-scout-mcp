@@ -1540,39 +1540,26 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
         let documentsChecked = 0;
 
         for (const rule of rules) {
-          let pipeline: any[];
-
-          if (rule.condition.$expr) {
-            pipeline = [
-              { $match: processedFilter },
-              { $limit: limit },
-              {
-                $match: {
-                  $expr: { $not: rule.condition.$expr },
+          if (!rule.condition.$expr) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Error: Validation rule '${rule.name}' must use $expr condition format. Non-$expr conditions are not supported.`,
                 },
-              },
-            ];
-          } else {
-            pipeline = [
-              { $match: processedFilter },
-              { $limit: limit },
-              {
-                $addFields: {
-                  __validationResult: rule.condition,
-                },
-              },
-              {
-                $match: {
-                  __validationResult: { $ne: true },
-                },
-              },
-              {
-                $project: {
-                  __validationResult: 0,
-                },
-              },
-            ];
+              ],
+            };
           }
+
+          const pipeline = [
+            { $match: processedFilter },
+            { $limit: limit },
+            {
+              $match: {
+                $expr: { $not: rule.condition.$expr },
+              },
+            },
+          ];
 
           const violatingDocs = await collectionObj.aggregate(pipeline).toArray();
 
@@ -1958,7 +1945,11 @@ function generatePerformanceRecommendations(
   }
 
   // Check selectivity ratio
-  if (nReturned > 0 && totalDocsExamined > 0) {
+  if (nReturned === 0 && totalDocsExamined > 0) {
+    recommendations.push(
+      `⚠ Query examined ${totalDocsExamined} documents but returned none - verify filter logic or check if data exists`
+    );
+  } else if (nReturned > 0 && totalDocsExamined > 0) {
     const selectivityRatio = totalDocsExamined / nReturned;
     if (selectivityRatio > 10) {
       recommendations.push(
