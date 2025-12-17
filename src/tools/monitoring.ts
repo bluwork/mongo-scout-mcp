@@ -436,12 +436,15 @@ export function registerMonitoringTools(server: McpServer, client: MongoClient, 
         const profileStatus = await targetDb.command({ profile: -1 });
 
         if (profileStatus.was === 0) {
+          const message = mode === 'read-only'
+            ? 'Database profiling is disabled. A database administrator with write access must enable profiling to collect performance data.'
+            : 'Database profiling is disabled. Enable profiling to collect performance data.';
           return {
             content: [
               {
                 type: 'text',
                 text: JSON.stringify({
-                  message: 'Database profiling is disabled. Enable profiling to collect performance data.',
+                  message,
                   profileStatus: profileStatus
                 }, null, 2),
               },
