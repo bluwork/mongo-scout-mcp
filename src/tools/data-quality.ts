@@ -98,7 +98,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
 
         pipeline.push(projectStage);
 
-        const duplicateGroups = await collectionObj.aggregate(pipeline).toArray();
+        const duplicateGroups = await collectionObj.aggregate(pipeline, { allowDiskUse: true }).toArray();
 
         // Calculate statistics
         const totalDocuments = await collectionObj.countDocuments({});
