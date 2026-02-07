@@ -1,6 +1,7 @@
 import { MongoClient } from 'mongodb';
 import { parseArgs } from './config/environment.js';
 import { setupServer } from './server/setup.js';
+import { stopRateLimiterCleanup } from './utils/rate-limiter.js';
 
 const { uri, dbName, mode } = parseArgs();
 const client = new MongoClient(uri);
@@ -14,6 +15,7 @@ async function shutdown() {
   isShuttingDown = true;
 
   try {
+    stopRateLimiterCleanup();
     await client.close();
   } catch (error) {
     console.error('Error during shutdown:', error);
