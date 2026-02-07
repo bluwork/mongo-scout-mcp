@@ -8,7 +8,7 @@ const ALLOWED_PARAMS: Record<string, string[]> = {
   serverstatus: ['serverStatus'],
   dbstats: ['dbStats', 'scale'],
   collstats: ['collStats', 'scale'],
-  replsetstatus: ['replSetGetStatus'],
+  replsetstatus: ['replSetGetStatus', 'replsetstatus'],
   replsetgetconfig: ['replSetGetConfig'],
   ismaster: ['isMaster', 'ismaster'],
   hello: ['hello'],
@@ -27,7 +27,7 @@ const ALLOWED_PARAMS: Record<string, string[]> = {
   getlog: ['getLog'],
   getparameter: ['getParameter', 'allParameters'],
   connpoolstats: ['connPoolStats'],
-  shardingstatus: ['shardingState'],
+  shardingstatus: ['shardingState', 'shardingstatus'],
 };
 
 const MAX_OBJECT_DEPTH = 2;
@@ -78,7 +78,7 @@ export function validateAdminCommandParams(
   const sanitizedCommand: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(command)) {
-    if (allowedSet.has(key)) {
+    if (allowedSet.has(key) || allowedSet.has(key.toLowerCase())) {
       sanitizedCommand[key] = value;
     } else {
       warnings.push(`Stripped unknown parameter '${key}' from ${commandName} command.`);

@@ -102,4 +102,31 @@ describe('validateAdminCommandParams', () => {
     expect(result.valid).toBe(true);
     expect(result.sanitizedCommand).toEqual({ serverstatus: 1 });
   });
+
+  it('accepts lowercase replsetstatus key', () => {
+    const result = validateAdminCommandParams(
+      { replsetstatus: 1 },
+      'replsetstatus'
+    );
+    expect(result.valid).toBe(true);
+    expect(result.sanitizedCommand).toEqual({ replsetstatus: 1 });
+  });
+
+  it('accepts lowercase shardingstatus key', () => {
+    const result = validateAdminCommandParams(
+      { shardingstatus: 1 },
+      'shardingstatus'
+    );
+    expect(result.valid).toBe(true);
+    expect(result.sanitizedCommand).toEqual({ shardingstatus: 1 });
+  });
+
+  it('accepts uppercase command keys like { LISTDATABASES: 1 }', () => {
+    const result = validateAdminCommandParams(
+      { LISTDATABASES: 1 },
+      'listdatabases'
+    );
+    expect(result.valid).toBe(true);
+    expect(result.sanitizedCommand).toEqual({ LISTDATABASES: 1 });
+  });
 });

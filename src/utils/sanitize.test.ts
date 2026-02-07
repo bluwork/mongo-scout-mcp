@@ -38,22 +38,20 @@ describe('convertObjectIdsToExtendedJson', () => {
 
 describe('sanitizeResponse', () => {
   it('redacts sensitive fields', () => {
-    // The sanitizer checks key.toLowerCase().includes(field) where field values
-    // are: 'connectionString', 'password', 'key', 'secret', 'token'
-    // Note: field values are NOT lowercased, so 'connectionString' won't match
-    // a key of 'connectionString' after toLowerCase (known behavior).
     const data = {
       name: 'test',
       password: 'secret123',
       apikey: 'key123',
       secretValue: 'hidden',
       tokenData: 'bearer xxx',
+      connectionString: 'mongodb://user:pass@localhost:27017/mydb',
     };
     const result = sanitizeResponse(data);
     expect(result.name).toBe('test');
     expect(result.password).toBe('[REDACTED]');
     expect(result.secretValue).toBe('[REDACTED]');
     expect(result.tokenData).toBe('[REDACTED]');
+    expect((result as any).connectionString).toBe('[REDACTED]');
   });
 
   it('redacts nested sensitive fields', () => {

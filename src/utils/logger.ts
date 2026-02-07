@@ -8,14 +8,16 @@ const ENABLE_LOGGING = process.env.ENABLE_LOGGING === 'true';
 
 let logDirInitialized = false;
 
-async function ensureLogDir(): Promise<void> {
-  if (logDirInitialized) return;
+async function ensureLogDir(): Promise<boolean> {
+  if (logDirInitialized) return true;
 
   try {
     await fs.mkdir(LOG_DIR, { recursive: true });
     logDirInitialized = true;
+    return true;
   } catch (error) {
     process.stderr.write(`[mongo-scout-mcp] logging failed: ${error}\n`);
+    return false;
   }
 }
 
@@ -27,11 +29,12 @@ export function logToolUsage(toolName: string, args: unknown, callerInfo?: strin
     callerInfo || 'Unknown'
   }\n---\n`;
 
-  void ensureLogDir().then(() =>
+  void ensureLogDir().then((ok) => {
+    if (!ok) return;
     fs.appendFile(TOOL_LOG_FILE, logEntry).catch((error) => {
       process.stderr.write(`[mongo-scout-mcp] logging failed: ${error}\n`);
-    })
-  );
+    });
+  });
 }
 
 export function logError(toolName: string, error: unknown, args?: unknown): void {
@@ -49,9 +52,10 @@ export function logError(toolName: string, error: unknown, args?: unknown): void
     2
   )}\n---\n`;
 
-  void ensureLogDir().then(() =>
+  void ensureLogDir().then((ok) => {
+    if (!ok) return;
     fs.appendFile(ERROR_LOG_FILE, logEntry).catch((error) => {
       process.stderr.write(`[mongo-scout-mcp] logging failed: ${error}\n`);
-    })
-  );
+    });
+  });
 }
