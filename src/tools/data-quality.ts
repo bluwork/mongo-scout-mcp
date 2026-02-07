@@ -761,7 +761,13 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
         // Sort by count descending
         pipeline.push({ $sort: { count: -1 } });
 
-        const results = await collectionObj.aggregate(pipeline).toArray();
+        const typeCursor = collectionObj.aggregate(pipeline);
+        let results;
+        try {
+          results = await typeCursor.toArray();
+        } finally {
+          await typeCursor.close();
+        }
 
         if (results.length === 0) {
           return {
@@ -1251,12 +1257,24 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
           });
         }
 
-        const orphans = await collectionObj.aggregate(pipeline).toArray();
+        const orphanCursor = collectionObj.aggregate(pipeline);
+        let orphans;
+        try {
+          orphans = await orphanCursor.toArray();
+        } finally {
+          await orphanCursor.close();
+        }
 
         // Count total orphans (without limit)
         const countPipeline = pipeline.slice(0, -2); // Remove limit and project
         countPipeline.push({ $count: 'total' });
-        const countResult = await collectionObj.aggregate(countPipeline).toArray();
+        const countCursor = collectionObj.aggregate(countPipeline);
+        let countResult;
+        try {
+          countResult = await countCursor.toArray();
+        } finally {
+          await countCursor.close();
+        }
         const totalOrphans = countResult.length > 0 ? countResult[0].total : 0;
 
         const executionTimeMs = Date.now() - startTime;
@@ -1561,7 +1579,13 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
             },
           ];
 
-          const violatingDocs = await collectionObj.aggregate(pipeline).toArray();
+          const ruleCursor = collectionObj.aggregate(pipeline);
+          let violatingDocs;
+          try {
+            violatingDocs = await ruleCursor.toArray();
+          } finally {
+            await ruleCursor.close();
+          }
 
           if (violatingDocs.length > 0) {
             violations.push({
