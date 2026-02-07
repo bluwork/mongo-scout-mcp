@@ -1676,7 +1676,7 @@ async function exploreDocumentRelationships(
   includeReverse: boolean,
   visited: Set<string> = new Set()
 ): Promise<any> {
-  const docKey = `${rootCollection}:${rootDoc._id}`;
+  const docKey = `${rootCollection}:${String(rootDoc._id)}`;
 
   // Prevent circular references
   if (visited.has(docKey)) {
