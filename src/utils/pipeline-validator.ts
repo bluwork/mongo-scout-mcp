@@ -14,6 +14,7 @@ function countStages(
   totals: { stages: number; expensive: number; expensiveNames: string[] }
 ): void {
   for (const stage of pipeline) {
+    if (!stage || typeof stage !== 'object' || Array.isArray(stage)) continue;
     const stageOp = Object.keys(stage)[0];
     if (!stageOp) continue;
 

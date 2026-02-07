@@ -138,6 +138,22 @@ describe('validatePipeline', () => {
     expect(result.error).toContain('including nested');
   });
 
+  it('handles null/primitive elements in nested pipelines without throwing', () => {
+    const pipeline = [
+      {
+        $lookup: {
+          from: 'other',
+          pipeline: [null, 42, 'bad', { $match: { x: 1 } }],
+          as: 'data',
+        },
+      },
+    ] as any;
+    const result = validatePipeline(pipeline);
+    expect(result.valid).toBe(true);
+    // Only the $lookup and the valid $match are counted
+    expect(result.stageCount).toBe(2);
+  });
+
   it('counts stages inside $unionWith pipeline field', () => {
     const pipeline = [
       {
