@@ -12,7 +12,11 @@ function cleanupExpiredEntries(): void {
   }
 }
 
-setInterval(cleanupExpiredEntries, CLEANUP_INTERVAL_MS);
+const cleanupIntervalId = setInterval(cleanupExpiredEntries, CLEANUP_INTERVAL_MS);
+
+export function stopRateLimiterCleanup(): void {
+  clearInterval(cleanupIntervalId);
+}
 
 export function checkAdminRateLimit(operation: string): boolean {
   const now = Date.now();
