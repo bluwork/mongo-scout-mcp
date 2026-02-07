@@ -1,9 +1,22 @@
-import type { Db } from 'mongodb';
+import type { Collection, Db, Document } from 'mongodb';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { logToolUsage, logError } from '../utils/logger.js';
 import { preprocessQuery } from '../utils/query-preprocessor.js';
 import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
+
+async function safeAggregate(collection: Collection, pipeline: Document[]): Promise<Document[]> {
+  const cursor = collection.aggregate(pipeline);
+  try {
+    return await cursor.toArray();
+  } finally {
+    try {
+      await cursor.close();
+    } catch {
+      // Ignore close errors to avoid masking the original error
+    }
+  }
+}
 
 export function registerDataQualityTools(server: McpServer, db: Db, mode: string): void {
   const registerTool = (toolName: string, description: string, schema: any, handler: (args?: any) => any, writeOperation = false) => {
@@ -761,13 +774,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
         // Sort by count descending
         pipeline.push({ $sort: { count: -1 } });
 
-        const typeCursor = collectionObj.aggregate(pipeline);
-        let results;
-        try {
-          results = await typeCursor.toArray();
-        } finally {
-          await typeCursor.close();
-        }
+        const results = await safeAggregate(collectionObj, pipeline);
 
         if (results.length === 0) {
           return {
@@ -1257,24 +1264,12 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
           });
         }
 
-        const orphanCursor = collectionObj.aggregate(pipeline);
-        let orphans;
-        try {
-          orphans = await orphanCursor.toArray();
-        } finally {
-          await orphanCursor.close();
-        }
+        const orphans = await safeAggregate(collectionObj, pipeline);
 
         // Count total orphans (without limit)
         const countPipeline = pipeline.slice(0, -2); // Remove limit and project
         countPipeline.push({ $count: 'total' });
-        const countCursor = collectionObj.aggregate(countPipeline);
-        let countResult;
-        try {
-          countResult = await countCursor.toArray();
-        } finally {
-          await countCursor.close();
-        }
+        const countResult = await safeAggregate(collectionObj, countPipeline);
         const totalOrphans = countResult.length > 0 ? countResult[0].total : 0;
 
         const executionTimeMs = Date.now() - startTime;
@@ -1579,13 +1574,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
             },
           ];
 
-          const ruleCursor = collectionObj.aggregate(pipeline);
-          let violatingDocs;
-          try {
-            violatingDocs = await ruleCursor.toArray();
-          } finally {
-            await ruleCursor.close();
-          }
+          const violatingDocs = await safeAggregate(collectionObj, pipeline);
 
           if (violatingDocs.length > 0) {
             violations.push({
