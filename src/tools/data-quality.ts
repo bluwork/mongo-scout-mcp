@@ -1,12 +1,12 @@
-import type { Collection, Db, Document } from 'mongodb';
+import type { AggregateOptions, Collection, Db, Document } from 'mongodb';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { logToolUsage, logError } from '../utils/logger.js';
 import { preprocessQuery } from '../utils/query-preprocessor.js';
 import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
 
-async function safeAggregate(collection: Collection, pipeline: Document[]): Promise<Document[]> {
-  const cursor = collection.aggregate(pipeline);
+async function safeAggregate(collection: Collection, pipeline: Document[], options?: AggregateOptions): Promise<Document[]> {
+  const cursor = collection.aggregate(pipeline, options);
   try {
     return await cursor.toArray();
   } finally {
