@@ -83,4 +83,23 @@ describe('validateAdminCommandParams', () => {
     expect(result.valid).toBe(true);
     expect(result.warnings).toHaveLength(1);
   });
+
+  it('accepts lowercase command keys like { dbstats: 1 }', () => {
+    const result = validateAdminCommandParams(
+      { dbstats: 1, scale: 1024 },
+      'dbstats'
+    );
+    expect(result.valid).toBe(true);
+    expect(result.warnings).toHaveLength(0);
+    expect(result.sanitizedCommand).toEqual({ dbstats: 1, scale: 1024 });
+  });
+
+  it('accepts lowercase serverstatus key', () => {
+    const result = validateAdminCommandParams(
+      { serverstatus: 1 },
+      'serverstatus'
+    );
+    expect(result.valid).toBe(true);
+    expect(result.sanitizedCommand).toEqual({ serverstatus: 1 });
+  });
 });

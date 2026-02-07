@@ -82,4 +82,74 @@ describe('validatePipeline', () => {
     expect(EXPENSIVE_STAGES).toContain('$facet');
     expect(EXPENSIVE_STAGES).toContain('$unionWith');
   });
+
+  it('counts stages in nested $lookup pipeline', () => {
+    const pipeline = [
+      {
+        $lookup: {
+          from: 'orders',
+          pipeline: [
+            { $match: { status: 'active' } },
+            { $limit: 10 },
+          ],
+          as: 'orders',
+        },
+      },
+    ];
+    const result = validatePipeline(pipeline);
+    expect(result.valid).toBe(true);
+    // 1 top-level $lookup + 2 nested = 3
+    expect(result.stageCount).toBe(3);
+    expect(result.expensiveStageCount).toBe(1);
+  });
+
+  it('counts expensive stages in nested $facet sub-pipelines', () => {
+    const pipeline = [
+      {
+        $facet: {
+          branch1: [
+            { $lookup: { from: 'a', pipeline: [], as: 'x' } },
+            { $lookup: { from: 'b', pipeline: [], as: 'y' } },
+          ],
+          branch2: [
+            { $graphLookup: { from: 'c', startWith: '$x', connectFromField: 'x', connectToField: 'y', as: 'z' } },
+          ],
+        },
+      },
+    ];
+    const result = validatePipeline(pipeline);
+    // 1 $facet + 2 $lookup + 1 $graphLookup = 4 expensive total
+    expect(result.expensiveStageCount).toBe(4);
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('expensive stages');
+  });
+
+  it('rejects nested sub-pipeline that pushes total stages over limit', () => {
+    const nestedStages = Array.from({ length: 18 }, () => ({ $match: { x: 1 } }));
+    const pipeline = [
+      { $match: { active: true } },
+      { $lookup: { from: 'other', pipeline: nestedStages, as: 'data' } },
+      { $limit: 10 },
+    ];
+    const result = validatePipeline(pipeline);
+    // 3 top-level + 18 nested = 21 > 20
+    expect(result.valid).toBe(false);
+    expect(result.stageCount).toBe(21);
+    expect(result.error).toContain('including nested');
+  });
+
+  it('counts stages inside $unionWith pipeline field', () => {
+    const pipeline = [
+      {
+        $unionWith: {
+          coll: 'other',
+          pipeline: [{ $match: { x: 1 } }, { $project: { x: 1 } }],
+        },
+      },
+    ];
+    const result = validatePipeline(pipeline);
+    // 1 $unionWith + 2 nested = 3
+    expect(result.stageCount).toBe(3);
+    expect(result.expensiveStageCount).toBe(1);
+  });
 });

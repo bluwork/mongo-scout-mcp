@@ -9,37 +9,65 @@ export interface PipelineValidationResult {
   expensiveStageCount: number;
 }
 
-export function validatePipeline(pipeline: Record<string, unknown>[]): PipelineValidationResult {
-  const stageCount = pipeline.length;
-
-  if (stageCount > MAX_PIPELINE_STAGES) {
-    return {
-      valid: false,
-      error: `Pipeline has ${stageCount} stages, exceeding the maximum of ${MAX_PIPELINE_STAGES}. Simplify the pipeline or break it into multiple queries.`,
-      stageCount,
-      expensiveStageCount: 0,
-    };
-  }
-
-  let expensiveStageCount = 0;
-  const expensiveStagesFound: string[] = [];
-
+function countStages(
+  pipeline: Record<string, unknown>[],
+  totals: { stages: number; expensive: number; expensiveNames: string[] }
+): void {
   for (const stage of pipeline) {
     const stageOp = Object.keys(stage)[0];
-    if (stageOp && EXPENSIVE_STAGES.includes(stageOp)) {
-      expensiveStageCount++;
-      expensiveStagesFound.push(stageOp);
+    if (!stageOp) continue;
+
+    totals.stages++;
+    if (EXPENSIVE_STAGES.includes(stageOp)) {
+      totals.expensive++;
+      totals.expensiveNames.push(stageOp);
+    }
+
+    // Recurse into nested sub-pipelines
+    const stageBody = stage[stageOp];
+    if (stageBody && typeof stageBody === 'object' && !Array.isArray(stageBody)) {
+      const body = stageBody as Record<string, unknown>;
+      // $lookup and $graphLookup have a `pipeline` field
+      if (Array.isArray(body.pipeline)) {
+        countStages(body.pipeline as Record<string, unknown>[], totals);
+      }
+      // $facet has multiple named sub-pipelines as values
+      if (stageOp === '$facet') {
+        for (const subPipeline of Object.values(body)) {
+          if (Array.isArray(subPipeline)) {
+            countStages(subPipeline as Record<string, unknown>[], totals);
+          }
+        }
+      }
+    }
+    // $unionWith can be { coll, pipeline } or just a string
+    if (stageOp === '$unionWith' && Array.isArray(stageBody)) {
+      countStages(stageBody as Record<string, unknown>[], totals);
     }
   }
+}
 
-  if (expensiveStageCount > MAX_EXPENSIVE_STAGES) {
+export function validatePipeline(pipeline: Record<string, unknown>[]): PipelineValidationResult {
+  const totals = { stages: 0, expensive: 0, expensiveNames: [] as string[] };
+  countStages(pipeline, totals);
+
+  if (totals.stages > MAX_PIPELINE_STAGES) {
     return {
       valid: false,
-      error: `Pipeline has ${expensiveStageCount} expensive stages (${expensiveStagesFound.join(', ')}), exceeding the maximum of ${MAX_EXPENSIVE_STAGES}. Reduce the number of ${EXPENSIVE_STAGES.join('/')} stages.`,
-      stageCount,
-      expensiveStageCount,
+      error: `Pipeline has ${totals.stages} stages (including nested), exceeding the maximum of ${MAX_PIPELINE_STAGES}. Simplify the pipeline or break it into multiple queries.`,
+      stageCount: totals.stages,
+      expensiveStageCount: totals.expensive,
     };
   }
 
-  return { valid: true, stageCount, expensiveStageCount };
+  if (totals.expensive > MAX_EXPENSIVE_STAGES) {
+    return {
+      valid: false,
+      error: `Pipeline has ${totals.expensive} expensive stages (${totals.expensiveNames.join(', ')}), exceeding the maximum of ${MAX_EXPENSIVE_STAGES}. Reduce the number of ${EXPENSIVE_STAGES.join('/')} stages.`,
+      stageCount: totals.stages,
+      expensiveStageCount: totals.expensive,
+    };
+  }
+
+  return { valid: true, stageCount: totals.stages, expensiveStageCount: totals.expensive };
 }

@@ -67,12 +67,18 @@ export function validateAdminCommandParams(
   }
 
   // Also always allow maxTimeMS (added by the caller)
+  // Include lowercase variants of allowed keys so that e.g. { dbstats: 1 }
+  // is accepted alongside { dbStats: 1 }
   const fullAllowedKeys = [...allowedKeys, 'maxTimeMS'];
+  const allowedSet = new Set(fullAllowedKeys);
+  for (const k of fullAllowedKeys) {
+    allowedSet.add(k.toLowerCase());
+  }
 
   const sanitizedCommand: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(command)) {
-    if (fullAllowedKeys.includes(key)) {
+    if (allowedSet.has(key)) {
       sanitizedCommand[key] = value;
     } else {
       warnings.push(`Stripped unknown parameter '${key}' from ${commandName} command.`);
