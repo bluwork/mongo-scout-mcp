@@ -154,6 +154,16 @@ describe('validatePipeline', () => {
     expect(result.stageCount).toBe(2);
   });
 
+  it('does not count a document field named "pipeline" as a sub-pipeline', () => {
+    const pipeline = [
+      { $match: { pipeline: ['step1', 'step2', 'step3'] } },
+      { $project: { pipeline: 1, name: 1 } },
+    ];
+    const result = validatePipeline(pipeline);
+    expect(result.valid).toBe(true);
+    expect(result.stageCount).toBe(2);
+  });
+
   it('counts stages inside $unionWith pipeline field', () => {
     const pipeline = [
       {

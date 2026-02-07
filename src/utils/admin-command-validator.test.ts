@@ -121,6 +121,14 @@ describe('validateAdminCommandParams', () => {
     expect(result.sanitizedCommand).toEqual({ shardingstatus: 1 });
   });
 
+  it('allows $in array filter without exceeding depth limit', () => {
+    const result = validateAdminCommandParams(
+      { listDatabases: 1, filter: { name: { $in: ['db1', 'db2', 'db3'] } } },
+      'listdatabases'
+    );
+    expect(result.valid).toBe(true);
+  });
+
   it('accepts uppercase command keys like { LISTDATABASES: 1 }', () => {
     const result = validateAdminCommandParams(
       { LISTDATABASES: 1 },

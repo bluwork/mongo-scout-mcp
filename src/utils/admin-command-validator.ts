@@ -40,7 +40,7 @@ function checkDepth(value: unknown, currentDepth: number): boolean {
     );
   }
   if (Array.isArray(value)) {
-    return value.every((v) => checkDepth(v, currentDepth + 1));
+    return value.every((v) => checkDepth(v, currentDepth));
   }
   return true;
 }

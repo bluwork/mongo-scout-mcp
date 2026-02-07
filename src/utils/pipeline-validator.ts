@@ -24,15 +24,13 @@ function countStages(
       totals.expensiveNames.push(stageOp);
     }
 
-    // Recurse into nested sub-pipelines
+    // Recurse into nested sub-pipelines only for operators that define them
     const stageBody = stage[stageOp];
     if (stageBody && typeof stageBody === 'object' && !Array.isArray(stageBody)) {
       const body = stageBody as Record<string, unknown>;
-      // $lookup and $graphLookup have a `pipeline` field
-      if (Array.isArray(body.pipeline)) {
+      if ((stageOp === '$lookup' || stageOp === '$graphLookup') && Array.isArray(body.pipeline)) {
         countStages(body.pipeline as Record<string, unknown>[], totals);
       }
-      // $facet has multiple named sub-pipelines as values
       if (stageOp === '$facet') {
         for (const subPipeline of Object.values(body)) {
           if (Array.isArray(subPipeline)) {
@@ -40,10 +38,9 @@ function countStages(
           }
         }
       }
-    }
-    // $unionWith can be { coll, pipeline } or just a string
-    if (stageOp === '$unionWith' && Array.isArray(stageBody)) {
-      countStages(stageBody as Record<string, unknown>[], totals);
+      if (stageOp === '$unionWith' && Array.isArray(body.pipeline)) {
+        countStages(body.pipeline as Record<string, unknown>[], totals);
+      }
     }
   }
 }
