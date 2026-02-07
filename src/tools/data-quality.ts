@@ -1,9 +1,22 @@
-import type { Db } from 'mongodb';
+import type { AggregateOptions, Collection, Db, Document } from 'mongodb';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { logToolUsage, logError } from '../utils/logger.js';
 import { preprocessQuery } from '../utils/query-preprocessor.js';
 import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
+
+async function safeAggregate(collection: Collection, pipeline: Document[], options?: AggregateOptions): Promise<Document[]> {
+  const cursor = collection.aggregate(pipeline, options);
+  try {
+    return await cursor.toArray();
+  } finally {
+    try {
+      await cursor.close();
+    } catch {
+      // Ignore close errors to avoid masking the original error
+    }
+  }
+}
 
 export function registerDataQualityTools(server: McpServer, db: Db, mode: string): void {
   const registerTool = (toolName: string, description: string, schema: any, handler: (args?: any) => any, writeOperation = false) => {
@@ -98,7 +111,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
 
         pipeline.push(projectStage);
 
-        const duplicateGroups = await collectionObj.aggregate(pipeline, { allowDiskUse: true }).toArray();
+        const duplicateGroups = await safeAggregate(collectionObj, pipeline, { allowDiskUse: true });
 
         // Calculate statistics
         const totalDocuments = await collectionObj.countDocuments({});
@@ -304,7 +317,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
 
         pipeline.push({ $out: destination });
 
-        await db.collection(source).aggregate(pipeline).toArray();
+        await safeAggregate(db.collection(source), pipeline);
 
         let indexesCopied = 0;
 
@@ -761,7 +774,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
         // Sort by count descending
         pipeline.push({ $sort: { count: -1 } });
 
-        const results = await collectionObj.aggregate(pipeline).toArray();
+        const results = await safeAggregate(collectionObj, pipeline);
 
         if (results.length === 0) {
           return {
@@ -1251,12 +1264,12 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
           });
         }
 
-        const orphans = await collectionObj.aggregate(pipeline).toArray();
+        const orphans = await safeAggregate(collectionObj, pipeline);
 
         // Count total orphans (without limit)
         const countPipeline = pipeline.slice(0, -2); // Remove limit and project
         countPipeline.push({ $count: 'total' });
-        const countResult = await collectionObj.aggregate(countPipeline).toArray();
+        const countResult = await safeAggregate(collectionObj, countPipeline);
         const totalOrphans = countResult.length > 0 ? countResult[0].total : 0;
 
         const executionTimeMs = Date.now() - startTime;
@@ -1561,7 +1574,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
             },
           ];
 
-          const violatingDocs = await collectionObj.aggregate(pipeline).toArray();
+          const violatingDocs = await safeAggregate(collectionObj, pipeline);
 
           if (violatingDocs.length > 0) {
             violations.push({
