@@ -111,7 +111,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
 
         pipeline.push(projectStage);
 
-        const duplicateGroups = await collectionObj.aggregate(pipeline, { allowDiskUse: true }).toArray();
+        const duplicateGroups = await safeAggregate(collectionObj, pipeline, { allowDiskUse: true });
 
         // Calculate statistics
         const totalDocuments = await collectionObj.countDocuments({});
@@ -317,7 +317,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
 
         pipeline.push({ $out: destination });
 
-        await db.collection(source).aggregate(pipeline).toArray();
+        await safeAggregate(db.collection(source), pipeline);
 
         let indexesCopied = 0;
 
