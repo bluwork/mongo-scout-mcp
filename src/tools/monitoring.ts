@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { logToolUsage, logError } from '../utils/logger.js';
 import { checkAdminRateLimit, ADMIN_RATE_LIMIT } from '../utils/rate-limiter.js';
 import { sanitizeResponse } from '../utils/sanitize.js';
+import { validateAdminCommandParams } from '../utils/admin-command-validator.js';
 import type { CurrentOpCommand, CurrentOpResult, ServerStatus, VerbosityLevel } from '../types.js';
 import { filterServerStatus, filterDatabaseStats, filterProfilerEntry, excludeZeroMetrics } from '../utils/response-filter.js';
 
@@ -227,20 +228,36 @@ export function registerMonitoringTools(server: McpServer, client: MongoClient, 
         };
       }
 
+      const paramValidation = validateAdminCommandParams(command, commandName);
+      if (!paramValidation.valid) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Command parameter validation failed: ${paramValidation.warnings.join('; ')}`,
+            },
+          ],
+        };
+      }
+
       const maxTimeout = 60000;
       const safeTimeout = Math.min(timeout, maxTimeout);
 
       try {
         const targetDb = client.db(database);
-        const commandWithTimeout = { ...command, maxTimeMS: safeTimeout };
+        const commandWithTimeout = { ...paramValidation.sanitizedCommand, maxTimeMS: safeTimeout };
         const result = await targetDb.admin().command(commandWithTimeout);
         const sanitizedResult = sanitizeResponse(result);
+
+        const responseText = paramValidation.warnings.length > 0
+          ? `Warning: ${paramValidation.warnings.join('; ')}\n\n${JSON.stringify(sanitizedResult, null, 2)}`
+          : JSON.stringify(sanitizedResult, null, 2);
 
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(sanitizedResult, null, 2),
+              text: responseText,
             },
           ],
         };

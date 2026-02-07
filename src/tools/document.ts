@@ -5,6 +5,7 @@ import { logToolUsage, logError } from '../utils/logger.js';
 import { preprocessQuery } from '../utils/query-preprocessor.js';
 import { shouldBlockFilter, validateFilter, getOperationWarning } from '../utils/filter-validator.js';
 import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
+import { validatePipeline } from '../utils/pipeline-validator.js';
 
 export function registerDocumentTools(server: McpServer, db: Db, mode: string): void {
   const registerTool = (toolName: string, description: string, schema: any, handler: (args?: any) => any, writeOperation = false) => {
@@ -93,6 +94,19 @@ export function registerDocumentTools(server: McpServer, db: Db, mode: string): 
     async (args) => {
       logToolUsage('aggregate', args);
       const { collection, pipeline, options = {} } = args;
+
+      const pipelineValidation = validatePipeline(pipeline);
+      if (!pipelineValidation.valid) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Aggregation pipeline rejected: ${pipelineValidation.error}`,
+            },
+          ],
+        };
+      }
+
       try {
         const result = await db.collection(collection).aggregate(pipeline, options).toArray();
         return {

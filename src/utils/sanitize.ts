@@ -41,7 +41,7 @@ export function sanitizeResponse<T>(data: T): T {
     if (!obj || typeof obj !== 'object') return;
 
     for (const [key, value] of Object.entries(obj)) {
-      if (sensitiveFields.some(field => key.toLowerCase().includes(field))) {
+      if (sensitiveFields.some(field => key.toLowerCase().includes(field.toLowerCase()))) {
         obj[key] = '[REDACTED]';
       } else if (typeof value === 'object' && value !== null) {
         sanitizeObject(value as Record<string, unknown>);
