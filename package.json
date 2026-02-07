@@ -10,7 +10,9 @@
     "dev": "ts-node --esm src/index.ts",
     "watch": "ts-node-dev --respawn --transpile-only src/index.ts",
     "prepublish": "pnpm run build",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "prepare": "chmod +x bin/cli.js"
   },
   "bin": {
@@ -37,6 +39,7 @@
     "@types/node": "^22.19.0",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.5"
   }
 }

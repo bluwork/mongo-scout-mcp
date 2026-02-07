@@ -15,7 +15,7 @@ async function ensureLogDir(): Promise<void> {
     await fs.mkdir(LOG_DIR, { recursive: true });
     logDirInitialized = true;
   } catch (error) {
-    // Silently fail - logging is non-critical
+    process.stderr.write(`[mongo-scout-mcp] logging failed: ${error}\n`);
   }
 }
 
@@ -28,7 +28,9 @@ export function logToolUsage(toolName: string, args: unknown, callerInfo?: strin
   }\n---\n`;
 
   void ensureLogDir().then(() =>
-    fs.appendFile(TOOL_LOG_FILE, logEntry).catch(() => {})
+    fs.appendFile(TOOL_LOG_FILE, logEntry).catch((error) => {
+      process.stderr.write(`[mongo-scout-mcp] logging failed: ${error}\n`);
+    })
   );
 }
 
@@ -48,6 +50,8 @@ export function logError(toolName: string, error: unknown, args?: unknown): void
   )}\n---\n`;
 
   void ensureLogDir().then(() =>
-    fs.appendFile(ERROR_LOG_FILE, logEntry).catch(() => {})
+    fs.appendFile(ERROR_LOG_FILE, logEntry).catch((error) => {
+      process.stderr.write(`[mongo-scout-mcp] logging failed: ${error}\n`);
+    })
   );
 }
