@@ -24,6 +24,7 @@ async function shutdown() {
 async function main() {
   try {
     await client.connect();
+    await client.db(dbName).command({ ping: 1 });
     await setupServer(client, dbName, mode);
   } catch (error) {
     console.error('Error:', error instanceof Error ? error.message : String(error));
