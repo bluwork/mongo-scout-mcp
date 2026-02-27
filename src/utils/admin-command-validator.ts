@@ -30,6 +30,13 @@ const ALLOWED_PARAMS: Record<string, string[]> = {
   shardingstatus: ['shardingState', 'shardingstatus'],
 };
 
+// Commands that modify server state — should be blocked in read-only mode
+export const WRITE_ADMIN_COMMANDS = ['profile', 'validate'];
+
+export function isWriteAdminCommand(commandName: string): boolean {
+  return WRITE_ADMIN_COMMANDS.includes(commandName.toLowerCase());
+}
+
 const MAX_OBJECT_DEPTH = 2;
 
 function checkDepth(value: unknown, currentDepth: number): boolean {

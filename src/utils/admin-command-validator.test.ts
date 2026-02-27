@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateAdminCommandParams } from './admin-command-validator.js';
+import { validateAdminCommandParams, isWriteAdminCommand, WRITE_ADMIN_COMMANDS } from './admin-command-validator.js';
 
 describe('validateAdminCommandParams', () => {
   it('allows valid listDatabases params', () => {
@@ -136,5 +136,43 @@ describe('validateAdminCommandParams', () => {
     );
     expect(result.valid).toBe(true);
     expect(result.sanitizedCommand).toEqual({ LISTDATABASES: 1 });
+  });
+});
+
+describe('WRITE_ADMIN_COMMANDS', () => {
+  it('includes profile and validate', () => {
+    expect(WRITE_ADMIN_COMMANDS).toContain('profile');
+    expect(WRITE_ADMIN_COMMANDS).toContain('validate');
+  });
+
+  it('does not include read-only commands', () => {
+    expect(WRITE_ADMIN_COMMANDS).not.toContain('ping');
+    expect(WRITE_ADMIN_COMMANDS).not.toContain('serverstatus');
+    expect(WRITE_ADMIN_COMMANDS).not.toContain('listdatabases');
+  });
+});
+
+describe('isWriteAdminCommand', () => {
+  it('identifies profile as a write command', () => {
+    expect(isWriteAdminCommand('profile')).toBe(true);
+  });
+
+  it('identifies validate as a write command', () => {
+    expect(isWriteAdminCommand('validate')).toBe(true);
+  });
+
+  it('is case-insensitive', () => {
+    expect(isWriteAdminCommand('PROFILE')).toBe(true);
+    expect(isWriteAdminCommand('Profile')).toBe(true);
+    expect(isWriteAdminCommand('VALIDATE')).toBe(true);
+  });
+
+  it('returns false for read-only commands', () => {
+    expect(isWriteAdminCommand('ping')).toBe(false);
+    expect(isWriteAdminCommand('serverStatus')).toBe(false);
+    expect(isWriteAdminCommand('dbStats')).toBe(false);
+    expect(isWriteAdminCommand('listDatabases')).toBe(false);
+    expect(isWriteAdminCommand('currentOp')).toBe(false);
+    expect(isWriteAdminCommand('getLog')).toBe(false);
   });
 });
