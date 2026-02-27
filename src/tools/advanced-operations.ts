@@ -5,6 +5,7 @@ import { logToolUsage, logError } from '../utils/logger.js';
 import { preprocessQuery } from '../utils/query-preprocessor.js';
 import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
 import { validatePipeline } from '../utils/pipeline-validator.js';
+import { validateBulkOperations } from '../utils/bulk-write-validator.js';
 
 export function registerAdvancedOperations(server: McpServer, db: Db, mode: string): void {
   const registerTool = (toolName: string, description: string, schema: any, handler: (args?: any) => any, writeOperation = false) => {
@@ -26,6 +27,13 @@ export function registerAdvancedOperations(server: McpServer, db: Db, mode: stri
       logToolUsage('previewBulkWrite', args);
       const { collection, operations } = args;
       try {
+        const validation = validateBulkOperations(operations);
+        if (!validation.valid) {
+          return {
+            content: [{ type: 'text', text: `Validation error: ${validation.error}` }],
+          };
+        }
+
         const operationsSummary = {
           insertOne: 0,
           updateOne: 0,
@@ -108,6 +116,13 @@ export function registerAdvancedOperations(server: McpServer, db: Db, mode: stri
       logToolUsage('bulkWrite', args);
       const { collection, operations, options = {} } = args;
       try {
+        const validation = validateBulkOperations(operations);
+        if (!validation.valid) {
+          return {
+            content: [{ type: 'text', text: `Validation error: ${validation.error}` }],
+          };
+        }
+
         // Dry run mode - show what would be executed
         if (options.dryRun) {
           const operationsSummary = {
