@@ -24,6 +24,10 @@ export function validateDatabaseName(name: string, allowedDbName: string): NameV
     return { valid: false, error: 'Database name must not be empty' };
   }
 
+  if (name.includes('\0')) {
+    return { valid: false, error: 'Database name must not contain null bytes' };
+  }
+
   if (name !== allowedDbName) {
     return { valid: false, error: `Database '${name}' is not the allowed database. Only '${allowedDbName}' can be accessed` };
   }

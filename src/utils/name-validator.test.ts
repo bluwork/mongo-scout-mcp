@@ -101,5 +101,11 @@ describe('validateDatabaseName', () => {
       expect(result.valid).toBe(false);
       expect(result.error).toMatch(/empty/i);
     });
+
+    it('rejects names containing null bytes', () => {
+      const result = validateDatabaseName('myapp\0evil', allowedDb);
+      expect(result.valid).toBe(false);
+      expect(result.error).toMatch(/null/i);
+    });
   });
 });
