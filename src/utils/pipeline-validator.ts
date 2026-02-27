@@ -1,17 +1,19 @@
 export const MAX_PIPELINE_STAGES = 20;
 export const EXPENSIVE_STAGES = ['$lookup', '$graphLookup', '$facet', '$unionWith'];
 export const MAX_EXPENSIVE_STAGES = 3;
+export const WRITE_STAGES = ['$out', '$merge'];
 
 export interface PipelineValidationResult {
   valid: boolean;
   error?: string;
   stageCount: number;
   expensiveStageCount: number;
+  writeStages?: string[];
 }
 
 function countStages(
   pipeline: Record<string, unknown>[],
-  totals: { stages: number; expensive: number; expensiveNames: string[] }
+  totals: { stages: number; expensive: number; expensiveNames: string[]; writeStages: string[] }
 ): void {
   for (const stage of pipeline) {
     if (!stage || typeof stage !== 'object' || Array.isArray(stage)) continue;
@@ -22,6 +24,9 @@ function countStages(
     if (EXPENSIVE_STAGES.includes(stageOp)) {
       totals.expensive++;
       totals.expensiveNames.push(stageOp);
+    }
+    if (WRITE_STAGES.includes(stageOp)) {
+      totals.writeStages.push(stageOp);
     }
 
     // Recurse into nested sub-pipelines only for operators that define them
@@ -46,8 +51,18 @@ function countStages(
 }
 
 export function validatePipeline(pipeline: Record<string, unknown>[]): PipelineValidationResult {
-  const totals = { stages: 0, expensive: 0, expensiveNames: [] as string[] };
+  const totals = { stages: 0, expensive: 0, expensiveNames: [] as string[], writeStages: [] as string[] };
   countStages(pipeline, totals);
+
+  if (totals.writeStages.length > 0) {
+    return {
+      valid: false,
+      error: `Pipeline contains write stages (${totals.writeStages.join(', ')}) which are not allowed. Use dedicated write tools instead.`,
+      stageCount: totals.stages,
+      expensiveStageCount: totals.expensive,
+      writeStages: totals.writeStages,
+    };
+  }
 
   if (totals.stages > MAX_PIPELINE_STAGES) {
     return {

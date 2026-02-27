@@ -4,6 +4,7 @@ import {
   MAX_PIPELINE_STAGES,
   MAX_EXPENSIVE_STAGES,
   EXPENSIVE_STAGES,
+  WRITE_STAGES,
 } from './pipeline-validator.js';
 
 describe('validatePipeline', () => {
@@ -177,5 +178,62 @@ describe('validatePipeline', () => {
     // 1 $unionWith + 2 nested = 3
     expect(result.stageCount).toBe(3);
     expect(result.expensiveStageCount).toBe(1);
+  });
+
+  it('rejects pipeline containing $out stage', () => {
+    const pipeline = [
+      { $match: { status: 'active' } },
+      { $out: 'target_collection' },
+    ];
+    const result = validatePipeline(pipeline);
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('write stages');
+    expect(result.error).toContain('$out');
+    expect(result.writeStages).toEqual(['$out']);
+  });
+
+  it('rejects pipeline containing $merge stage', () => {
+    const pipeline = [
+      { $match: { status: 'active' } },
+      { $merge: { into: 'target', whenMatched: 'replace' } },
+    ];
+    const result = validatePipeline(pipeline);
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('write stages');
+    expect(result.error).toContain('$merge');
+    expect(result.writeStages).toEqual(['$merge']);
+  });
+
+  it('rejects $out nested inside $facet sub-pipeline', () => {
+    const pipeline = [
+      {
+        $facet: {
+          branch: [{ $match: { x: 1 } }, { $out: 'sneaky' }],
+        },
+      },
+    ];
+    const result = validatePipeline(pipeline);
+    expect(result.valid).toBe(false);
+    expect(result.writeStages).toEqual(['$out']);
+  });
+
+  it('rejects $merge nested inside $lookup sub-pipeline', () => {
+    const pipeline = [
+      {
+        $lookup: {
+          from: 'other',
+          pipeline: [{ $merge: { into: 'sneaky' } }],
+          as: 'data',
+        },
+      },
+    ];
+    const result = validatePipeline(pipeline);
+    expect(result.valid).toBe(false);
+    expect(result.writeStages).toEqual(['$merge']);
+  });
+
+  it('exports WRITE_STAGES constant', () => {
+    expect(WRITE_STAGES).toContain('$out');
+    expect(WRITE_STAGES).toContain('$merge');
   });
 });
