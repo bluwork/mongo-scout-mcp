@@ -190,4 +190,38 @@ describe('validateBulkOperations', () => {
       expect(result.error).toMatch(/empty/i);
     });
   });
+
+  describe('invalid operation elements', () => {
+    it('rejects null operation element', () => {
+      const result = validateBulkOperations([null as any]);
+      expect(result.valid).toBe(false);
+      expect(result.error).toMatch(/operation 1/i);
+    });
+
+    it('rejects undefined operation element', () => {
+      const result = validateBulkOperations([undefined as any]);
+      expect(result.valid).toBe(false);
+      expect(result.error).toMatch(/operation 1/i);
+    });
+
+    it('rejects primitive operation element', () => {
+      const result = validateBulkOperations(['not an object' as any]);
+      expect(result.valid).toBe(false);
+      expect(result.error).toMatch(/operation 1/i);
+    });
+
+    it('rejects array operation element', () => {
+      const result = validateBulkOperations([[{ insertOne: { document: {} } }] as any]);
+      expect(result.valid).toBe(false);
+      expect(result.error).toMatch(/operation 1/i);
+    });
+
+    it('rejects non-object filter in multi-doc operation', () => {
+      const result = validateBulkOperations([
+        { updateMany: { filter: 'not an object', update: { $set: { x: 1 } } } } as any,
+      ]);
+      expect(result.valid).toBe(false);
+      expect(result.error).toMatch(/empty filter|invalid/i);
+    });
+  });
 });

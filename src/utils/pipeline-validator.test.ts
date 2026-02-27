@@ -304,4 +304,26 @@ describe('validatePipeline', () => {
     expect(WRITE_STAGES).toContain('$out');
     expect(WRITE_STAGES).toContain('$merge');
   });
+
+  it('rejects pipeline with $where in $match', () => {
+    const result = validatePipeline([{ $match: { $where: 'true' } }]);
+    expect(result.valid).toBe(false);
+    expect(result.error).toMatch(/blocked.*\$where/i);
+  });
+
+  it('rejects pipeline with $function in $addFields', () => {
+    const result = validatePipeline([
+      { $addFields: { x: { $function: { body: 'bad', args: [], lang: 'js' } } } },
+    ]);
+    expect(result.valid).toBe(false);
+    expect(result.error).toMatch(/blocked.*\$function/i);
+  });
+
+  it('rejects pipeline with $accumulator in $group', () => {
+    const result = validatePipeline([
+      { $group: { _id: null, total: { $accumulator: { init: '', accumulate: '', merge: '', lang: 'js' } } } },
+    ]);
+    expect(result.valid).toBe(false);
+    expect(result.error).toMatch(/blocked.*\$accumulator/i);
+  });
 });

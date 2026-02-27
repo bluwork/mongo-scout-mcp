@@ -34,8 +34,16 @@ export function validateBulkOperations(operations: Record<string, any>[]): BulkV
 
   for (let i = 0; i < operations.length; i++) {
     const op = operations[i];
-    const keys = Object.keys(op);
     const opIndex = i + 1; // 1-based for human-readable messages
+
+    if (op === null || op === undefined || typeof op !== 'object' || Array.isArray(op)) {
+      return {
+        valid: false,
+        error: `Operation ${opIndex}: expected a non-null object, got ${op === null ? 'null' : Array.isArray(op) ? 'array' : typeof op}.`,
+      };
+    }
+
+    const keys = Object.keys(op);
 
     if (keys.length === 0) {
       return { valid: false, error: `Operation ${opIndex}: empty operation object.` };
@@ -62,7 +70,8 @@ export function validateBulkOperations(operations: Record<string, any>[]): BulkV
     // Check empty filters on multi-doc operations
     if (MULTI_DOC_OPERATIONS.includes(opType)) {
       const filter = opBody?.filter;
-      if (!filter || Object.keys(filter).length === 0) {
+      const isValidFilter = filter && typeof filter === 'object' && !Array.isArray(filter);
+      if (!isValidFilter || Object.keys(filter).length === 0) {
         return {
           valid: false,
           error: `Operation ${opIndex} (${opType}): empty filter would affect ALL documents. Use a specific filter or dedicated ${opType} tool with allowEmptyFilter option.`,
