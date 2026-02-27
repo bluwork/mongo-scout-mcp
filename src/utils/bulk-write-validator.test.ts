@@ -221,7 +221,65 @@ describe('validateBulkOperations', () => {
         { updateMany: { filter: 'not an object', update: { $set: { x: 1 } } } } as any,
       ]);
       expect(result.valid).toBe(false);
-      expect(result.error).toMatch(/empty filter|invalid/i);
+      expect(result.error).toMatch(/filter.*expected.*object/i);
+    });
+  });
+
+  describe('structural validation of operation body', () => {
+    it('rejects primitive opBody (e.g. { updateOne: 123 })', () => {
+      const result = validateBulkOperations([{ updateOne: 123 } as any]);
+      expect(result.valid).toBe(false);
+      expect(result.error).toMatch(/operation 1.*updateOne.*expected.*object/i);
+    });
+
+    it('rejects null opBody', () => {
+      const result = validateBulkOperations([{ deleteOne: null } as any]);
+      expect(result.valid).toBe(false);
+      expect(result.error).toMatch(/operation 1.*deleteOne.*expected.*object/i);
+    });
+
+    it('rejects array opBody', () => {
+      const result = validateBulkOperations([{ insertOne: [{ document: {} }] } as any]);
+      expect(result.valid).toBe(false);
+      expect(result.error).toMatch(/operation 1.*insertOne.*expected.*object/i);
+    });
+
+    it('rejects string opBody', () => {
+      const result = validateBulkOperations([{ replaceOne: 'bad' } as any]);
+      expect(result.valid).toBe(false);
+      expect(result.error).toMatch(/operation 1.*replaceOne.*expected.*object/i);
+    });
+
+    it('rejects non-object filter in filter-based operations', () => {
+      const result = validateBulkOperations([
+        { updateOne: { filter: 'not-an-object', update: { $set: { x: 1 } } } } as any,
+      ]);
+      expect(result.valid).toBe(false);
+      expect(result.error).toMatch(/operation 1.*filter.*expected.*object/i);
+    });
+
+    it('rejects array filter in filter-based operations', () => {
+      const result = validateBulkOperations([
+        { deleteOne: { filter: [{ _id: '1' }] } } as any,
+      ]);
+      expect(result.valid).toBe(false);
+      expect(result.error).toMatch(/operation 1.*filter.*expected.*object/i);
+    });
+
+    it('accepts valid opBody with proper structure', () => {
+      const result = validateBulkOperations([
+        { updateOne: { filter: { _id: '1' }, update: { $set: { x: 1 } } } },
+      ]);
+      expect(result.valid).toBe(true);
+    });
+
+    it('reports correct index for structural error in second operation', () => {
+      const result = validateBulkOperations([
+        { insertOne: { document: { x: 1 } } },
+        { updateOne: 'bad' } as any,
+      ]);
+      expect(result.valid).toBe(false);
+      expect(result.error).toMatch(/operation 2/i);
     });
   });
 });
