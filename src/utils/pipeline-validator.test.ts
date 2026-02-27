@@ -255,6 +255,51 @@ describe('validatePipeline', () => {
     expect(result.writeStages).toEqual(['$out']);
   });
 
+  it('rejects $out nested in $facet when $facet is non-first key', () => {
+    const pipeline = [
+      {
+        $match: { status: 'active' },
+        $facet: {
+          branch: [{ $match: { x: 1 } }, { $out: 'sneaky' }],
+        },
+      } as any,
+    ];
+    const result = validatePipeline(pipeline);
+    expect(result.valid).toBe(false);
+    expect(result.writeStages).toEqual(['$out']);
+  });
+
+  it('rejects $merge nested in $lookup when $lookup is non-first key', () => {
+    const pipeline = [
+      {
+        $match: { status: 'active' },
+        $lookup: {
+          from: 'other',
+          pipeline: [{ $merge: { into: 'sneaky' } }],
+          as: 'data',
+        },
+      } as any,
+    ];
+    const result = validatePipeline(pipeline);
+    expect(result.valid).toBe(false);
+    expect(result.writeStages).toEqual(['$merge']);
+  });
+
+  it('rejects $out nested in $unionWith when $unionWith is non-first key', () => {
+    const pipeline = [
+      {
+        $match: { status: 'active' },
+        $unionWith: {
+          coll: 'other',
+          pipeline: [{ $match: { y: 1 } }, { $out: 'sneaky' }],
+        },
+      } as any,
+    ];
+    const result = validatePipeline(pipeline);
+    expect(result.valid).toBe(false);
+    expect(result.writeStages).toEqual(['$out']);
+  });
+
   it('exports WRITE_STAGES constant', () => {
     expect(WRITE_STAGES).toContain('$out');
     expect(WRITE_STAGES).toContain('$merge');

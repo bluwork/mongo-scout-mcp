@@ -36,21 +36,22 @@ function countStages(
     }
     if (totals.writeStages.length > 0) return;
 
-    // Recurse into nested sub-pipelines only for operators that define them
-    const stageBody = stage[stageOp];
-    if (stageBody && typeof stageBody === 'object' && !Array.isArray(stageBody)) {
+    // Recurse into nested sub-pipelines for all keys (defense-in-depth against multi-key objects)
+    for (const key of keys) {
+      const stageBody = stage[key];
+      if (!stageBody || typeof stageBody !== 'object' || Array.isArray(stageBody)) continue;
       const body = stageBody as Record<string, unknown>;
-      if ((stageOp === '$lookup' || stageOp === '$graphLookup') && Array.isArray(body.pipeline)) {
+      if ((key === '$lookup' || key === '$graphLookup') && Array.isArray(body.pipeline)) {
         countStages(body.pipeline as Record<string, unknown>[], totals);
       }
-      if (stageOp === '$facet') {
+      if (key === '$facet') {
         for (const subPipeline of Object.values(body)) {
           if (Array.isArray(subPipeline)) {
             countStages(subPipeline as Record<string, unknown>[], totals);
           }
         }
       }
-      if (stageOp === '$unionWith' && Array.isArray(body.pipeline)) {
+      if (key === '$unionWith' && Array.isArray(body.pipeline)) {
         countStages(body.pipeline as Record<string, unknown>[], totals);
       }
     }
