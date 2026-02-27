@@ -76,4 +76,14 @@ describe('preprocessQuery', () => {
     expect(preprocessQuery(null as any)).toBeNull();
     expect(preprocessQuery(undefined as any)).toBeUndefined();
   });
+
+  it('throws on $where operator', () => {
+    expect(() => preprocessQuery({ $where: 'sleep(1000)' })).toThrow(/\$where.*blocked.*query filter/i);
+  });
+
+  it('throws on nested $function operator', () => {
+    expect(() =>
+      preprocessQuery({ $expr: { $function: { body: 'bad', args: [], lang: 'js' } } })
+    ).toThrow(/\$function.*blocked/i);
+  });
 });
