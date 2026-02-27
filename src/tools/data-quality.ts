@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { logToolUsage, logError } from '../utils/logger.js';
 import { preprocessQuery } from '../utils/query-preprocessor.js';
 import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
+import { assertNoDangerousOperators } from '../utils/operator-validator.js';
 
 async function safeAggregate(collection: Collection, pipeline: Document[], options?: AggregateOptions): Promise<Document[]> {
   const cursor = collection.aggregate(pipeline, options);
@@ -1563,6 +1564,8 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
               ],
             };
           }
+
+          assertNoDangerousOperators(rule.condition, `validation rule '${rule.name}'`);
 
           const pipeline = [
             { $match: processedFilter },
