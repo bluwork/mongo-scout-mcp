@@ -30,6 +30,31 @@ const ALLOWED_PARAMS: Record<string, string[]> = {
   shardingstatus: ['shardingState', 'shardingstatus'],
 };
 
+export function isWriteAdminCommand(commandName: string, command: Record<string, unknown>): boolean {
+  const name = commandName.toLowerCase();
+
+  if (name === 'profile') {
+    // profile: -1 is read-only (query status). 0/1/2 change profiling level.
+    // slowms/sampleRate modify profiler config even with profile: -1.
+    const hasConfigChange = Object.keys(command).some(
+      k => k.toLowerCase() === 'slowms' || k.toLowerCase() === 'samplerate'
+    );
+    const profileValue = Object.entries(command).find(
+      ([k]) => k.toLowerCase() === 'profile'
+    )?.[1];
+    return hasConfigChange || profileValue !== -1;
+  }
+
+  if (name === 'validate') {
+    // validate is read-only unless repair: true
+    return Object.entries(command).some(
+      ([k, v]) => k.toLowerCase() === 'repair' && v === true
+    );
+  }
+
+  return false;
+}
+
 const MAX_OBJECT_DEPTH = 2;
 
 function checkDepth(value: unknown, currentDepth: number): boolean {

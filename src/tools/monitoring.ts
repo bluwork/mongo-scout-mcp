@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { logToolUsage, logError } from '../utils/logger.js';
 import { checkAdminRateLimit, ADMIN_RATE_LIMIT } from '../utils/rate-limiter.js';
 import { sanitizeResponse } from '../utils/sanitize.js';
-import { validateAdminCommandParams } from '../utils/admin-command-validator.js';
+import { validateAdminCommandParams, isWriteAdminCommand } from '../utils/admin-command-validator.js';
 import type { CurrentOpCommand, CurrentOpResult, ServerStatus, VerbosityLevel } from '../types.js';
 import { filterServerStatus, filterDatabaseStats, filterProfilerEntry, excludeZeroMetrics } from '../utils/response-filter.js';
 
@@ -223,6 +223,17 @@ export function registerMonitoringTools(server: McpServer, client: MongoClient, 
             {
               type: 'text',
               text: `Command '${commandName}' is not in the list of allowed commands. Allowed: ${allowedCommands.join(', ')}`,
+            },
+          ],
+        };
+      }
+
+      if (mode === 'read-only' && isWriteAdminCommand(commandName, command)) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Command '${commandName}' can modify server state and is not allowed in read-only mode. Switch to read-write mode to use this command.`,
             },
           ],
         };
