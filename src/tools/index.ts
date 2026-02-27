@@ -11,6 +11,59 @@ import { registerAdvancedOperations } from './advanced-operations.js';
 import { registerDataQualityTools } from './data-quality.js';
 import { registerTemporalTools } from './temporal.js';
 import { withConnectionGuard } from '../utils/connection-guard.js';
+import { validateCollectionName, validateDatabaseName } from '../utils/name-validator.js';
+
+export const COLLECTION_PARAMS = new Set([
+  'collection', 'name', 'source', 'destination', 'referenceCollection', 'foreignCollection',
+]);
+
+export const DATABASE_PARAMS = new Set(['database']);
+
+export function wrapServerWithNameValidation(server: McpServer, dbName: string): McpServer {
+  const originalTool = server.tool.bind(server);
+
+  server.tool = ((...args: unknown[]) => {
+    const lastIndex = args.length - 1;
+
+    if (typeof args[lastIndex] === 'function') {
+      const originalHandler = args[lastIndex] as (handlerArgs: Record<string, unknown>) => Promise<unknown>;
+
+      args[lastIndex] = async (handlerArgs: Record<string, unknown>) => {
+        if (handlerArgs && typeof handlerArgs === 'object') {
+          for (const [key, value] of Object.entries(handlerArgs)) {
+            if (typeof value !== 'string') continue;
+
+            if (COLLECTION_PARAMS.has(key)) {
+              const result = validateCollectionName(value);
+              if (!result.valid) {
+                return {
+                  content: [{ type: 'text' as const, text: `Error: ${result.error}` }],
+                  isError: true,
+                };
+              }
+            }
+
+            if (DATABASE_PARAMS.has(key)) {
+              const result = validateDatabaseName(value, dbName);
+              if (!result.valid) {
+                return {
+                  content: [{ type: 'text' as const, text: `Error: ${result.error}` }],
+                  isError: true,
+                };
+              }
+            }
+          }
+        }
+
+        return originalHandler(handlerArgs);
+      };
+    }
+
+    return (originalTool as (...a: unknown[]) => unknown)(...args);
+  }) as typeof server.tool;
+
+  return server;
+}
 
 function wrapServerWithConnectionGuard(server: McpServer): McpServer {
   const originalTool = server.tool.bind(server);
@@ -37,7 +90,8 @@ export function registerAllTools(
   dbName: string,
   mode: string
 ): void {
-  const guardedServer = wrapServerWithConnectionGuard(server);
+  const validatedServer = wrapServerWithNameValidation(server, dbName);
+  const guardedServer = wrapServerWithConnectionGuard(validatedServer);
 
   registerDatabaseTools(guardedServer, client, mode);
   registerCollectionTools(guardedServer, db, mode);

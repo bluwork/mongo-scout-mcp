@@ -195,7 +195,7 @@ export function registerMonitoringTools(server: McpServer, client: MongoClient, 
     },
     async (args) => {
       logToolUsage('runAdminCommand', args);
-      const { command, database = 'admin', timeout = 30000 } = args;
+      const { command, database = dbName, timeout = 30000 } = args;
 
       if (!checkAdminRateLimit('runAdminCommand')) {
         return {
