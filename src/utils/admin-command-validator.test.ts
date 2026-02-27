@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateAdminCommandParams, isWriteAdminCommand, WRITE_ADMIN_COMMANDS } from './admin-command-validator.js';
+import { validateAdminCommandParams, isWriteAdminCommand } from './admin-command-validator.js';
 
 describe('validateAdminCommandParams', () => {
   it('allows valid listDatabases params', () => {
@@ -139,40 +139,74 @@ describe('validateAdminCommandParams', () => {
   });
 });
 
-describe('WRITE_ADMIN_COMMANDS', () => {
-  it('includes profile and validate', () => {
-    expect(WRITE_ADMIN_COMMANDS).toContain('profile');
-    expect(WRITE_ADMIN_COMMANDS).toContain('validate');
-  });
-
-  it('does not include read-only commands', () => {
-    expect(WRITE_ADMIN_COMMANDS).not.toContain('ping');
-    expect(WRITE_ADMIN_COMMANDS).not.toContain('serverstatus');
-    expect(WRITE_ADMIN_COMMANDS).not.toContain('listdatabases');
-  });
-});
-
 describe('isWriteAdminCommand', () => {
-  it('identifies profile as a write command', () => {
-    expect(isWriteAdminCommand('profile')).toBe(true);
+  describe('profile command', () => {
+    it('is write when setting profiling level to 0', () => {
+      expect(isWriteAdminCommand('profile', { profile: 0 })).toBe(true);
+    });
+
+    it('is write when setting profiling level to 1', () => {
+      expect(isWriteAdminCommand('profile', { profile: 1 })).toBe(true);
+    });
+
+    it('is write when setting profiling level to 2', () => {
+      expect(isWriteAdminCommand('profile', { profile: 2 })).toBe(true);
+    });
+
+    it('is write when setting slowms (modifies profiler config)', () => {
+      expect(isWriteAdminCommand('profile', { profile: -1, slowms: 200 })).toBe(true);
+    });
+
+    it('is write when setting sampleRate (modifies profiler config)', () => {
+      expect(isWriteAdminCommand('profile', { profile: -1, sampleRate: 0.5 })).toBe(true);
+    });
+
+    it('is read-only when querying profiler status (profile: -1)', () => {
+      expect(isWriteAdminCommand('profile', { profile: -1 })).toBe(false);
+    });
+
+    it('is case-insensitive on command name', () => {
+      expect(isWriteAdminCommand('PROFILE', { profile: 2 })).toBe(true);
+      expect(isWriteAdminCommand('Profile', { profile: -1 })).toBe(false);
+    });
   });
 
-  it('identifies validate as a write command', () => {
-    expect(isWriteAdminCommand('validate')).toBe(true);
+  describe('validate command', () => {
+    it('is read-only without repair', () => {
+      expect(isWriteAdminCommand('validate', { validate: 'myCollection' })).toBe(false);
+    });
+
+    it('is read-only with full: true (still read-only)', () => {
+      expect(isWriteAdminCommand('validate', { validate: 'myCollection', full: true })).toBe(false);
+    });
+
+    it('is write when repair is true', () => {
+      expect(isWriteAdminCommand('validate', { validate: 'myCollection', repair: true })).toBe(true);
+    });
+
+    it('is read-only when repair is false', () => {
+      expect(isWriteAdminCommand('validate', { validate: 'myCollection', repair: false })).toBe(false);
+    });
+
+    it('handles case-insensitive repair key', () => {
+      expect(isWriteAdminCommand('validate', { validate: 'myCollection', Repair: true } as any)).toBe(true);
+      expect(isWriteAdminCommand('validate', { validate: 'myCollection', REPAIR: true } as any)).toBe(true);
+    });
+
+    it('is case-insensitive on command name', () => {
+      expect(isWriteAdminCommand('VALIDATE', { validate: 'col', repair: true })).toBe(true);
+      expect(isWriteAdminCommand('Validate', { validate: 'col' })).toBe(false);
+    });
   });
 
-  it('is case-insensitive', () => {
-    expect(isWriteAdminCommand('PROFILE')).toBe(true);
-    expect(isWriteAdminCommand('Profile')).toBe(true);
-    expect(isWriteAdminCommand('VALIDATE')).toBe(true);
-  });
-
-  it('returns false for read-only commands', () => {
-    expect(isWriteAdminCommand('ping')).toBe(false);
-    expect(isWriteAdminCommand('serverStatus')).toBe(false);
-    expect(isWriteAdminCommand('dbStats')).toBe(false);
-    expect(isWriteAdminCommand('listDatabases')).toBe(false);
-    expect(isWriteAdminCommand('currentOp')).toBe(false);
-    expect(isWriteAdminCommand('getLog')).toBe(false);
+  describe('other commands', () => {
+    it('returns false for read-only commands', () => {
+      expect(isWriteAdminCommand('ping', { ping: 1 })).toBe(false);
+      expect(isWriteAdminCommand('serverStatus', { serverStatus: 1 })).toBe(false);
+      expect(isWriteAdminCommand('dbStats', { dbStats: 1 })).toBe(false);
+      expect(isWriteAdminCommand('listDatabases', { listDatabases: 1 })).toBe(false);
+      expect(isWriteAdminCommand('currentOp', { currentOp: 1 })).toBe(false);
+      expect(isWriteAdminCommand('getLog', { getLog: 'global' })).toBe(false);
+    });
   });
 });

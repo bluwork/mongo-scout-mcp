@@ -228,7 +228,7 @@ export function registerMonitoringTools(server: McpServer, client: MongoClient, 
         };
       }
 
-      if (mode === 'read-only' && isWriteAdminCommand(commandName)) {
+      if (mode === 'read-only' && isWriteAdminCommand(commandName, command)) {
         return {
           content: [
             {

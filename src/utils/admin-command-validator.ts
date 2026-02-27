@@ -30,11 +30,29 @@ const ALLOWED_PARAMS: Record<string, string[]> = {
   shardingstatus: ['shardingState', 'shardingstatus'],
 };
 
-// Commands that modify server state — should be blocked in read-only mode
-export const WRITE_ADMIN_COMMANDS = ['profile', 'validate'];
+export function isWriteAdminCommand(commandName: string, command: Record<string, unknown>): boolean {
+  const name = commandName.toLowerCase();
 
-export function isWriteAdminCommand(commandName: string): boolean {
-  return WRITE_ADMIN_COMMANDS.includes(commandName.toLowerCase());
+  if (name === 'profile') {
+    // profile: -1 is read-only (query status). 0/1/2 change profiling level.
+    // slowms/sampleRate modify profiler config even with profile: -1.
+    const hasConfigChange = Object.keys(command).some(
+      k => k.toLowerCase() === 'slowms' || k.toLowerCase() === 'samplerate'
+    );
+    const profileValue = Object.entries(command).find(
+      ([k]) => k.toLowerCase() === 'profile'
+    )?.[1];
+    return hasConfigChange || profileValue !== -1;
+  }
+
+  if (name === 'validate') {
+    // validate is read-only unless repair: true
+    return Object.entries(command).some(
+      ([k, v]) => k.toLowerCase() === 'repair' && v === true
+    );
+  }
+
+  return false;
 }
 
 const MAX_OBJECT_DEPTH = 2;
