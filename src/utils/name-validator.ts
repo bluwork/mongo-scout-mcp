@@ -18,3 +18,15 @@ export function validateCollectionName(name: string): NameValidationResult {
 
   return { valid: true };
 }
+
+export function validateDatabaseName(name: string, allowedDbName: string): NameValidationResult {
+  if (!name || name.length === 0) {
+    return { valid: false, error: 'Database name must not be empty' };
+  }
+
+  if (name !== allowedDbName) {
+    return { valid: false, error: `Database '${name}' is not the allowed database. Only '${allowedDbName}' can be accessed` };
+  }
+
+  return { valid: true };
+}
