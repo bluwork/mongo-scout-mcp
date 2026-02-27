@@ -57,6 +57,39 @@ describe('scanForDangerousOperators', () => {
       expect(scanForDangerousOperators(query).found).toBe(false);
     });
 
+    it('allows $literal containing operator-like keys (not executable)', () => {
+      const pipeline = [
+        { $project: { x: { $literal: { $function: 'text' } } } },
+      ];
+      expect(scanForDangerousOperators(pipeline).found).toBe(false);
+    });
+
+    it('allows $literal with $where-like key as data', () => {
+      const query = { field: { $literal: { $where: 'not code' } } };
+      expect(scanForDangerousOperators(query).found).toBe(false);
+    });
+
+    it('allows deeply nested $literal', () => {
+      const pipeline = [
+        {
+          $addFields: {
+            meta: { $literal: { $accumulator: { init: 'data' }, $eval: 'data' } },
+          },
+        },
+      ];
+      expect(scanForDangerousOperators(pipeline).found).toBe(false);
+    });
+
+    it('still detects dangerous operators alongside $literal', () => {
+      const pipeline = [
+        { $project: { safe: { $literal: { $function: 'data' } } } },
+        { $addFields: { bad: { $function: { body: 'evil()', args: [], lang: 'js' } } } },
+      ];
+      const result = scanForDangerousOperators(pipeline);
+      expect(result.found).toBe(true);
+      expect(result.operator).toBe('$function');
+    });
+
     it('allows arrays of safe objects', () => {
       const pipeline = [
         { $match: { status: 'active' } },
@@ -166,8 +199,9 @@ describe('scanForDangerousOperators', () => {
           },
         },
       ];
-      expect(scanForDangerousOperators(pipeline).found).toBe(true);
-      expect(scanForDangerousOperators(pipeline).operator).toBe('$accumulator');
+      const result = scanForDangerousOperators(pipeline);
+      expect(result.found).toBe(true);
+      expect(result.operator).toBe('$accumulator');
     });
 
     it('detects $function inside $addFields pipeline stage', () => {
@@ -180,8 +214,9 @@ describe('scanForDangerousOperators', () => {
           },
         },
       ];
-      expect(scanForDangerousOperators(pipeline).found).toBe(true);
-      expect(scanForDangerousOperators(pipeline).operator).toBe('$function');
+      const result = scanForDangerousOperators(pipeline);
+      expect(result.found).toBe(true);
+      expect(result.operator).toBe('$function');
     });
 
     it('detects dangerous operators inside $facet sub-pipelines', () => {
@@ -194,8 +229,9 @@ describe('scanForDangerousOperators', () => {
           },
         },
       ];
-      expect(scanForDangerousOperators(pipeline).found).toBe(true);
-      expect(scanForDangerousOperators(pipeline).operator).toBe('$where');
+      const result = scanForDangerousOperators(pipeline);
+      expect(result.found).toBe(true);
+      expect(result.operator).toBe('$where');
     });
 
     it('detects dangerous operators inside $lookup sub-pipelines', () => {
@@ -214,8 +250,9 @@ describe('scanForDangerousOperators', () => {
           },
         },
       ];
-      expect(scanForDangerousOperators(pipeline).found).toBe(true);
-      expect(scanForDangerousOperators(pipeline).operator).toBe('$function');
+      const result = scanForDangerousOperators(pipeline);
+      expect(result.found).toBe(true);
+      expect(result.operator).toBe('$function');
     });
   });
 

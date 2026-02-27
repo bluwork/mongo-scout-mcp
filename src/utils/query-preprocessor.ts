@@ -62,12 +62,10 @@ function preprocessQueryValue(value: unknown, fieldName?: string): unknown {
   return processed;
 }
 
-export function preprocessQuery(query: MongoQuery): MongoFilter {
+function preprocessQueryInner(query: MongoQuery): MongoFilter {
   if (!query || typeof query !== 'object') {
     return query;
   }
-
-  assertNoDangerousOperators(query, 'query filter');
 
   const processed: Record<string, unknown> = {};
 
@@ -83,7 +81,7 @@ export function preprocessQuery(query: MongoQuery): MongoFilter {
         processed[key] = value;
       }
     } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      processed[key] = preprocessQuery(value as MongoQuery);
+      processed[key] = preprocessQueryInner(value as MongoQuery);
     } else if (Array.isArray(value)) {
       processed[key] = value.map(item => {
         if (isExtendedJsonObjectId(item)) {
@@ -92,7 +90,7 @@ export function preprocessQuery(query: MongoQuery): MongoFilter {
         if (isObjectIdField(key) && typeof item === 'string' && ObjectId.isValid(item)) {
           return new ObjectId(item);
         }
-        return typeof item === 'object' ? preprocessQuery(item as MongoQuery) : item;
+        return typeof item === 'object' ? preprocessQueryInner(item as MongoQuery) : item;
       });
     } else {
       processed[key] = value;
@@ -100,4 +98,13 @@ export function preprocessQuery(query: MongoQuery): MongoFilter {
   }
 
   return processed;
+}
+
+export function preprocessQuery(query: MongoQuery): MongoFilter {
+  if (!query || typeof query !== 'object') {
+    return query;
+  }
+
+  assertNoDangerousOperators(query, 'query filter');
+  return preprocessQueryInner(query);
 }

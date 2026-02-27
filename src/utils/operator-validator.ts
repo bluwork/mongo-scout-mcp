@@ -25,6 +25,9 @@ export function scanForDangerousOperators(obj: unknown, currentPath = ''): Opera
       return { found: true, operator: key, path };
     }
 
+    // $literal values are raw data, not executable — skip recursion
+    if (key === '$literal') continue;
+
     const nestedPath = currentPath ? `${currentPath}.${key}` : key;
     const result = scanForDangerousOperators(value, nestedPath);
     if (result.found) return result;
