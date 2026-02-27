@@ -1,5 +1,6 @@
 import { ObjectId } from 'mongodb';
 import type { MongoQuery, MongoFilter } from '../types.js';
+import { assertNoDangerousOperators } from './operator-validator.js';
 
 function isObjectIdField(fieldName: string): boolean {
   const objectIdPatterns = [
@@ -65,6 +66,8 @@ export function preprocessQuery(query: MongoQuery): MongoFilter {
   if (!query || typeof query !== 'object') {
     return query;
   }
+
+  assertNoDangerousOperators(query, 'query filter');
 
   const processed: Record<string, unknown> = {};
 
