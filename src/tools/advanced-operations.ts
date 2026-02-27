@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { logToolUsage, logError } from '../utils/logger.js';
 import { preprocessQuery } from '../utils/query-preprocessor.js';
 import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
+import { validatePipeline } from '../utils/pipeline-validator.js';
 
 export function registerAdvancedOperations(server: McpServer, db: Db, mode: string): void {
   const registerTool = (toolName: string, description: string, schema: any, handler: (args?: any) => any, writeOperation = false) => {
@@ -209,6 +210,14 @@ export function registerAdvancedOperations(server: McpServer, db: Db, mode: stri
             if (!pipeline) {
               throw new Error('Pipeline is required for aggregate operation');
             }
+            {
+              const pipelineValidation = validatePipeline(pipeline);
+              if (!pipelineValidation.valid) {
+                return {
+                  content: [{ type: 'text', text: `Pipeline validation error: ${pipelineValidation.error}` }],
+                };
+              }
+            }
             explainResult = await db.collection(collection).aggregate(pipeline).explain(verbosity);
             break;
           case 'update':
@@ -275,9 +284,10 @@ export function registerAdvancedOperations(server: McpServer, db: Db, mode: stri
       logToolUsage('textSearch', args);
       const { collection, searchText, filter = {}, limit = 10, projection = {} } = args;
       try {
+        const processedFilter = preprocessQuery(filter);
         const searchQuery = {
           $text: { $search: searchText },
-          ...filter
+          ...processedFilter
         };
 
         const results = await db.collection(collection)

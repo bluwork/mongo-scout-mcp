@@ -1,3 +1,5 @@
+import { scanForDangerousOperators } from './operator-validator.js';
+
 export const MAX_PIPELINE_STAGES = 20;
 export const EXPENSIVE_STAGES = ['$lookup', '$graphLookup', '$facet', '$unionWith'];
 export const MAX_EXPENSIVE_STAGES = 3;
@@ -59,6 +61,16 @@ function countStages(
 }
 
 export function validatePipeline(pipeline: Record<string, unknown>[]): PipelineValidationResult {
+  const dangerousScan = scanForDangerousOperators(pipeline);
+  if (dangerousScan.found) {
+    return {
+      valid: false,
+      error: `Pipeline contains blocked operator ${dangerousScan.operator} at ${dangerousScan.path}: server-side JavaScript execution is not allowed.`,
+      stageCount: 0,
+      expensiveStageCount: 0,
+    };
+  }
+
   const totals = { stages: 0, expensive: 0, expensiveNames: [] as string[], writeStages: [] as string[] };
   countStages(pipeline, totals);
 
