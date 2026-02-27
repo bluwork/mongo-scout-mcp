@@ -67,6 +67,25 @@ export function validateBulkOperations(operations: Record<string, any>[]): BulkV
 
     const opBody = op[opType];
 
+    // Validate opBody is a non-null object
+    if (opBody === null || opBody === undefined || typeof opBody !== 'object' || Array.isArray(opBody)) {
+      return {
+        valid: false,
+        error: `Operation ${opIndex} (${opType}): expected operation body to be a non-null object, got ${opBody === null ? 'null' : Array.isArray(opBody) ? 'array' : typeof opBody}.`,
+      };
+    }
+
+    // Validate filter is a non-null, non-array object for filter-based operations
+    if (OPERATIONS_WITH_FILTER.includes(opType) && opBody.filter !== undefined) {
+      const filter = opBody.filter;
+      if (filter === null || typeof filter !== 'object' || Array.isArray(filter)) {
+        return {
+          valid: false,
+          error: `Operation ${opIndex} (${opType}): filter expected to be a non-null object, got ${filter === null ? 'null' : Array.isArray(filter) ? 'array' : typeof filter}.`,
+        };
+      }
+    }
+
     // Check empty filters on multi-doc operations
     if (MULTI_DOC_OPERATIONS.includes(opType)) {
       const filter = opBody?.filter;
