@@ -16,8 +16,10 @@ function countStages(
   totals: { stages: number; expensive: number; expensiveNames: string[]; writeStages: string[] }
 ): void {
   for (const stage of pipeline) {
+    if (totals.writeStages.length > 0) return;
     if (!stage || typeof stage !== 'object' || Array.isArray(stage)) continue;
-    const stageOp = Object.keys(stage)[0];
+    const keys = Object.keys(stage);
+    const stageOp = keys[0];
     if (!stageOp) continue;
 
     totals.stages++;
@@ -25,9 +27,14 @@ function countStages(
       totals.expensive++;
       totals.expensiveNames.push(stageOp);
     }
-    if (WRITE_STAGES.includes(stageOp)) {
-      totals.writeStages.push(stageOp);
+
+    // Scan all keys for write stages (defense-in-depth against multi-key objects)
+    for (const key of keys) {
+      if (WRITE_STAGES.includes(key)) {
+        totals.writeStages.push(key);
+      }
     }
+    if (totals.writeStages.length > 0) return;
 
     // Recurse into nested sub-pipelines only for operators that define them
     const stageBody = stage[stageOp];

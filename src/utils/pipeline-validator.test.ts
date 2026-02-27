@@ -232,6 +232,29 @@ describe('validatePipeline', () => {
     expect(result.writeStages).toEqual(['$merge']);
   });
 
+  it('rejects $out nested inside $unionWith sub-pipeline', () => {
+    const pipeline = [
+      {
+        $unionWith: {
+          coll: 'other',
+          pipeline: [{ $match: { y: 1 } }, { $out: 'sneaky' }],
+        },
+      },
+    ];
+    const result = validatePipeline(pipeline);
+    expect(result.valid).toBe(false);
+    expect(result.writeStages).toEqual(['$out']);
+  });
+
+  it('rejects write stage hidden as non-first key in multi-key object', () => {
+    const pipeline = [
+      { $match: { status: 'active' }, $out: 'sneaky' } as any,
+    ];
+    const result = validatePipeline(pipeline);
+    expect(result.valid).toBe(false);
+    expect(result.writeStages).toEqual(['$out']);
+  });
+
   it('exports WRITE_STAGES constant', () => {
     expect(WRITE_STAGES).toContain('$out');
     expect(WRITE_STAGES).toContain('$merge');
