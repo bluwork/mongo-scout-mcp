@@ -353,7 +353,7 @@ describe('Fix 9: filter nesting depth limit via tool handler', () => {
     return filter;
   }
 
-  it('getProfilerStats rejects filter nested 11 levels deep', async () => {
+  it('getProfilerStats rejects filter exceeding MAX_FILTER_DEPTH', async () => {
     const { server, registeredTools } = createMockServer();
     const { db, client } = createMockDb();
     registerMonitoringTools(server, client, db, 'testdb', 'read-only');
@@ -361,18 +361,20 @@ describe('Fix 9: filter nesting depth limit via tool handler', () => {
     const handler = registeredTools['getProfilerStats']?.handler;
     expect(handler).toBeDefined();
 
-    const deepFilter = buildNestedFilter(11);
+    // Each $or layer costs 2 depth (object + array), 6 layers = depth 12 > MAX_FILTER_DEPTH(10)
+    const deepFilter = buildNestedFilter(6);
     const result = await handler({ filter: deepFilter });
     expect(result.content[0].text).toMatch(/depth|nesting/i);
   });
 
-  it('getProfilerStats allows filter nested 10 levels deep', async () => {
+  it('getProfilerStats allows filter at MAX_FILTER_DEPTH', async () => {
     const { server, registeredTools } = createMockServer();
     const { db, client } = createMockDb();
     registerMonitoringTools(server, client, db, 'testdb', 'read-only');
 
     const handler = registeredTools['getProfilerStats']?.handler;
-    const okFilter = buildNestedFilter(10);
+    // Each $or layer costs 2 depth (object + array), 5 layers = depth 10 = MAX_FILTER_DEPTH
+    const okFilter = buildNestedFilter(5);
     const result = await handler({ filter: okFilter });
     expect(result.content[0].text).not.toMatch(/depth|nesting/i);
   });

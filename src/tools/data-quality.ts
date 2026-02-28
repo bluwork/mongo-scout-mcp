@@ -13,9 +13,7 @@ async function safeAggregate(collection: Collection, pipeline: Document[], optio
   const sanitized = options ? sanitizeAggregateOptions(options as Record<string, unknown>) as AggregateOptions : undefined;
   const cursor = collection.aggregate(pipeline, sanitized);
   try {
-    const raw = await cursor.toArray();
-    const { result } = capResultSize(raw as Record<string, unknown>[]);
-    return result as Document[];
+    return await cursor.toArray();
   } finally {
     try {
       await cursor.close();
@@ -153,6 +151,9 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
           }
         }
 
+        const { result: cappedGroups, truncated: groupsTruncated, warning: groupsWarning } =
+          capResultSize(duplicateGroups as Record<string, unknown>[]);
+
         return {
           content: [
             {
@@ -169,7 +170,8 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
                     duplicateDocuments: affectedDocuments,
                     duplicatePercentage: parseFloat(duplicatePercentage.toFixed(2)),
                   },
-                  duplicateGroups,
+                  duplicateGroups: cappedGroups,
+                  ...(groupsTruncated ? { warning: groupsWarning } : {}),
                   recommendations,
                 },
                 null,
@@ -1338,7 +1340,9 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
                     orphanedDocuments: totalOrphans,
                     orphanPercentage,
                   },
-                  orphans: includeDocuments ? orphans : orphans.map(o => ({ _id: o._id, [foreignKey]: o[foreignKey] })),
+                  orphans: capResultSize(
+                    (includeDocuments ? orphans : orphans.map(o => ({ _id: o._id, [foreignKey]: o[foreignKey] }))) as Record<string, unknown>[]
+                  ).result,
                   executionTimeMs,
                   recommendations,
                 },

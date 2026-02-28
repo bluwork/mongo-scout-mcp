@@ -25,7 +25,7 @@ export function capResultSize(data: Record<string, unknown>[]): {
   warning?: string;
 } {
   const serialized = JSON.stringify(data);
-  if (serialized.length <= MAX_RESULT_SIZE_BYTES) {
+  if (Buffer.byteLength(serialized, 'utf8') <= MAX_RESULT_SIZE_BYTES) {
     return { result: data, truncated: false };
   }
 
@@ -34,7 +34,7 @@ export function capResultSize(data: Record<string, unknown>[]): {
   let hi = data.length;
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2);
-    if (JSON.stringify(data.slice(0, mid)).length <= MAX_RESULT_SIZE_BYTES) {
+    if (Buffer.byteLength(JSON.stringify(data.slice(0, mid)), 'utf8') <= MAX_RESULT_SIZE_BYTES) {
       lo = mid;
     } else {
       hi = mid - 1;

@@ -27,13 +27,13 @@ function countStages(
     if (!stageOp) continue;
 
     totals.stages++;
-    if (EXPENSIVE_STAGES.includes(stageOp)) {
-      totals.expensive++;
-      totals.expensiveNames.push(stageOp);
-    }
 
-    // Scan all keys for write and blocked stages (defense-in-depth against multi-key objects)
+    // Scan all keys for expensive, write, and blocked stages (defense-in-depth against multi-key objects)
     for (const key of keys) {
+      if (EXPENSIVE_STAGES.includes(key)) {
+        totals.expensive++;
+        totals.expensiveNames.push(key);
+      }
       if (WRITE_STAGES.includes(key)) {
         totals.writeStages.push(key);
       }

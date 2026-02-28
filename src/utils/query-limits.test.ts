@@ -62,4 +62,14 @@ describe('capResultSize', () => {
   it('exports MAX_RESULT_SIZE_BYTES', () => {
     expect(MAX_RESULT_SIZE_BYTES).toBe(1_048_576);
   });
+
+  it('measures size in bytes, not string length (multibyte chars)', () => {
+    // Each emoji is 4 bytes in UTF-8 but 2 code units in JS strings
+    const emoji = '\u{1F600}'; // 😀
+    const item = { data: emoji.repeat(300_000) }; // ~1.2MB in bytes, ~600K in .length
+    const data = [item];
+    const { truncated } = capResultSize(data);
+    // With byte counting, this exceeds 1MB; with .length it wouldn't
+    expect(truncated).toBe(true);
+  });
 });

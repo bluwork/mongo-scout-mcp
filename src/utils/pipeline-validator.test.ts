@@ -76,6 +76,15 @@ describe('validatePipeline', () => {
     expect(result.expensiveStageCount).toBe(EXPENSIVE_STAGES.length);
   });
 
+  it('detects expensive stage hidden as non-first key in multi-key object', () => {
+    const pipeline = Array.from({ length: MAX_EXPENSIVE_STAGES + 1 }, () => ({
+      $match: { x: 1 }, $lookup: { from: 'other', localField: 'a', foreignField: 'b', as: 'c' },
+    } as any));
+    const result = validatePipeline(pipeline);
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('expensive stages');
+  });
+
   it('exports expected constants', () => {
     expect(MAX_PIPELINE_STAGES).toBe(20);
     expect(MAX_EXPENSIVE_STAGES).toBe(3);

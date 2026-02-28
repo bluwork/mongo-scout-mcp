@@ -97,8 +97,9 @@ describe('validateFilterDepth', () => {
   });
 
   it('accepts filter at exactly MAX_FILTER_DEPTH', () => {
+    // Each {$or: [X]} layer costs 2 depth (object→array), so 5 layers = depth 10 = MAX_FILTER_DEPTH
     let filter: any = { name: 'test' };
-    for (let i = 0; i < MAX_FILTER_DEPTH; i++) {
+    for (let i = 0; i < 5; i++) {
       filter = { $or: [filter] };
     }
     const result = validateFilterDepth(filter);
@@ -115,7 +116,8 @@ describe('validateFilterDepth', () => {
   });
 
   it('accepts custom maxDepth parameter', () => {
-    const filter = { $or: [{ $and: [{ name: 'test' }] }] };
+    // {$or: [{name: 'test'}]} = depth 2 (object + array), fits in maxDepth 2
+    const filter = { $or: [{ name: 'test' }] };
     const result = validateFilterDepth(filter, 2);
     expect(result.valid).toBe(true);
   });
@@ -124,6 +126,18 @@ describe('validateFilterDepth', () => {
     const filter = { $or: [{ $and: [{ $or: [{ name: 'test' }] }] }] };
     const result = validateFilterDepth(filter, 2);
     expect(result.valid).toBe(false);
+  });
+
+  it('rejects deeply nested arrays (array depth bypass)', () => {
+    // Nested arrays should increment depth to prevent bypass
+    let filter: any = { name: 'test' };
+    for (let i = 0; i < 20; i++) {
+      filter = [filter];
+    }
+    filter = { $or: filter };
+    const result = validateFilterDepth(filter);
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('depth');
   });
 
   it('exports MAX_FILTER_DEPTH as 10', () => {

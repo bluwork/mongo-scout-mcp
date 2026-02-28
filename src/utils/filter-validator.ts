@@ -85,7 +85,8 @@ export function validateFilterDepth(
     if (Array.isArray(obj)) {
       let max = depth;
       for (const item of obj) {
-        max = Math.max(max, measure(item, depth));
+        max = Math.max(max, measure(item, depth + 1));
+        if (max > maxDepth) return max;
       }
       return max;
     }
