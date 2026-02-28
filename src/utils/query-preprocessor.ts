@@ -1,6 +1,7 @@
 import { ObjectId } from 'mongodb';
 import type { MongoQuery, MongoFilter } from '../types.js';
 import { assertNoDangerousOperators } from './operator-validator.js';
+import { validateFilterDepth } from './filter-validator.js';
 
 function isObjectIdField(fieldName: string): boolean {
   const objectIdPatterns = [
@@ -106,5 +107,9 @@ export function preprocessQuery(query: MongoQuery): MongoFilter {
   }
 
   assertNoDangerousOperators(query, 'query filter');
+  const depthCheck = validateFilterDepth(query as Record<string, any>);
+  if (!depthCheck.valid) {
+    throw new Error(depthCheck.error);
+  }
   return preprocessQueryInner(query);
 }
