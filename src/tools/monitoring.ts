@@ -5,6 +5,7 @@ import { logToolUsage, logError } from '../utils/logger.js';
 import { checkAdminRateLimit, ADMIN_RATE_LIMIT } from '../utils/rate-limiter.js';
 import { sanitizeResponse } from '../utils/sanitize.js';
 import { validateAdminCommandParams, isWriteAdminCommand } from '../utils/admin-command-validator.js';
+import { preprocessQuery } from '../utils/query-preprocessor.js';
 import type { CurrentOpCommand, CurrentOpResult, ServerStatus, VerbosityLevel } from '../types.js';
 import { filterServerStatus, filterDatabaseStats, filterProfilerEntry, excludeZeroMetrics } from '../utils/response-filter.js';
 
@@ -480,9 +481,11 @@ export function registerMonitoringTools(server: McpServer, client: MongoClient, 
           };
         }
 
+        const processedFilter = preprocessQuery(filter);
+
         const profileData = await targetDb
           .collection('system.profile')
-          .find(filter)
+          .find(processedFilter)
           .sort(sort)
           .limit(limit)
           .toArray();

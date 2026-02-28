@@ -5,7 +5,7 @@ import { logToolUsage, logError } from '../utils/logger.js';
 import { preprocessQuery } from '../utils/query-preprocessor.js';
 import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
 import { assertNoDangerousOperators } from '../utils/operator-validator.js';
-import { validateCollectionName } from '../utils/name-validator.js';
+import { validateCollectionName, validateFieldName } from '../utils/name-validator.js';
 import { MAX_QUERY_LIMIT, MAX_EXPORT_LIMIT, MAX_SAMPLE_SIZE } from '../utils/query-limits.js';
 
 async function safeAggregate(collection: Collection, pipeline: Document[], options?: AggregateOptions): Promise<Document[]> {
@@ -315,6 +315,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
         const pipeline: any[] = [{ $match: processedFilter }];
 
         if (projection) {
+          assertNoDangerousOperators(projection, 'projection');
           pipeline.push({ $project: projection });
         }
 
@@ -426,9 +427,12 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
         // Get documents
         let cursor = db.collection(collection).find(processedFilter);
 
-        if (projection) cursor = cursor.project(projection);
+        if (projection) {
+          assertNoDangerousOperators(projection, 'projection');
+          cursor = cursor.project(projection);
+        }
         if (sort) cursor = cursor.sort(sort);
-        if (limit) cursor = cursor.limit(limit);
+        cursor = cursor.limit(limit ?? MAX_EXPORT_LIMIT);
 
         const documents = await cursor.toArray();
 
@@ -1083,7 +1087,10 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
 
         // Build query
         let cursor = collectionObj.find(processedFilter);
-        if (projection) cursor = cursor.project(projection);
+        if (projection) {
+          assertNoDangerousOperators(projection, 'projection');
+          cursor = cursor.project(projection);
+        }
         if (sort) cursor = cursor.sort(sort);
         if (limit) cursor = cursor.limit(limit);
 
@@ -1380,12 +1387,26 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
         limit = 10,
       } = options;
 
-      // Validate all foreignCollection names in relationships array
+      // Validate all foreignCollection names and field names in relationships array
       for (const rel of relationships) {
         const nameCheck = validateCollectionName(rel.foreignCollection);
         if (!nameCheck.valid) {
           return {
             content: [{ type: 'text' as const, text: `Error: ${nameCheck.error}` }],
+            isError: true,
+          };
+        }
+        const localFieldCheck = validateFieldName(rel.localField);
+        if (!localFieldCheck.valid) {
+          return {
+            content: [{ type: 'text' as const, text: `Error: ${localFieldCheck.error}` }],
+            isError: true,
+          };
+        }
+        const foreignFieldCheck = validateFieldName(rel.foreignField);
+        if (!foreignFieldCheck.valid) {
+          return {
+            content: [{ type: 'text' as const, text: `Error: ${foreignFieldCheck.error}` }],
             isError: true,
           };
         }

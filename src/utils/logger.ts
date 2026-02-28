@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { redactString } from './uri-redactor.js';
+import { redactSensitiveKeys } from './log-redactor.js';
 
 const LOG_DIR = process.env.LOG_DIR || './logs';
 const TOOL_LOG_FILE = path.join(LOG_DIR, 'tool-usage.log');
@@ -13,7 +14,9 @@ async function ensureLogDir(): Promise<boolean> {
   if (logDirInitialized) return true;
 
   try {
-    await fs.mkdir(LOG_DIR, { recursive: true });
+    await fs.mkdir(LOG_DIR, { recursive: true, mode: 0o700 });
+    // Best-effort: harden existing dirs but don't fail logging if we lack ownership
+    try { await fs.chmod(LOG_DIR, 0o700); } catch { /* EPERM on unowned dirs is acceptable */ }
     logDirInitialized = true;
     return true;
   } catch (error) {
@@ -26,7 +29,8 @@ export function logToolUsage(toolName: string, args: unknown, callerInfo?: strin
   if (!ENABLE_LOGGING) return;
 
   const timestamp = new Date().toISOString();
-  const logEntry = `[${timestamp}] TOOL: ${toolName}\nArgs: ${redactString(JSON.stringify(args, null, 2))}\nCaller: ${
+  const redactedArgs = redactSensitiveKeys(args);
+  const logEntry = `[${timestamp}] TOOL: ${toolName}\nArgs: ${redactString(JSON.stringify(redactedArgs, null, 2))}\nCaller: ${
     callerInfo || 'Unknown'
   }\n---\n`;
 
@@ -47,8 +51,9 @@ export function logError(toolName: string, error: unknown, args?: unknown): void
   if (!ENABLE_LOGGING) return;
 
   const timestamp = new Date().toISOString();
+  const redactedArgs = redactSensitiveKeys(args);
   const logEntry = `[${timestamp}] ERROR: ${toolName}\nError: ${errorMessage}\nStack: ${errorStack || 'N/A'}\nArgs: ${redactString(JSON.stringify(
-    args,
+    redactedArgs,
     null,
     2
   ))}\n---\n`;
