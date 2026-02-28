@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
-import { MAX_QUERY_LIMIT, MAX_EXPORT_LIMIT, MAX_SAMPLE_SIZE } from './query-limits.js';
+import { MAX_QUERY_LIMIT, MAX_EXPORT_LIMIT, MAX_SAMPLE_SIZE, capResultSize, MAX_RESULT_SIZE_BYTES } from './query-limits.js';
 
 describe('query limits constants', () => {
   it('MAX_QUERY_LIMIT is 10000', () => {
@@ -32,5 +32,34 @@ describe('query limits constants', () => {
     const schema = z.number().positive().max(MAX_SAMPLE_SIZE).optional();
     expect(schema.safeParse(10_001).success).toBe(false);
     expect(schema.safeParse(10_000).success).toBe(true);
+  });
+});
+
+describe('capResultSize', () => {
+  it('returns result unchanged when under size limit', () => {
+    const data = [{ name: 'test' }];
+    const { result, truncated } = capResultSize(data);
+    expect(result).toEqual(data);
+    expect(truncated).toBe(false);
+  });
+
+  it('truncates result array when over size limit', () => {
+    const bigItem = { data: 'x'.repeat(200_000) };
+    const data = Array.from({ length: 10 }, () => ({ ...bigItem }));
+    const { result, truncated, warning } = capResultSize(data);
+    expect(truncated).toBe(true);
+    expect(result.length).toBeLessThan(data.length);
+    expect(warning).toContain('size limit');
+  });
+
+  it('returns at least one item even if single item exceeds limit', () => {
+    const data = [{ data: 'x'.repeat(2_000_000) }];
+    const { result, truncated } = capResultSize(data);
+    expect(result.length).toBe(1);
+    expect(truncated).toBe(true);
+  });
+
+  it('exports MAX_RESULT_SIZE_BYTES', () => {
+    expect(MAX_RESULT_SIZE_BYTES).toBe(1_048_576);
   });
 });
