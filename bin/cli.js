@@ -11,10 +11,10 @@ const __dirname = dirname(__filename);
 // Parse command line arguments
 const args = process.argv.slice(2);
 const helpText = `
-MongoDB Model Context Protocol (MCP) Server for GitHub Copilot
+Mongo Scout MCP - MongoDB Model Context Protocol Server
 
 Usage:
-  mongodb-mcp [options] [mongodb-uri] [database-name]
+  mongo-scout-mcp [options] [mongodb-uri] [database-name]
 
 Options:
   --help, -h         Show this help message
@@ -28,9 +28,9 @@ Arguments:
   database-name      Database name to use (default: test)
 
 Examples:
-  mongodb-mcp
-  mongodb-mcp --read-write mongodb://localhost:27017 mydb
-  mongodb-mcp --mode read-only mongodb://localhost:27017 mydb
+  mongo-scout-mcp
+  mongo-scout-mcp --read-write mongodb://localhost:27017 mydb
+  mongo-scout-mcp --mode read-only mongodb://localhost:27017 mydb
 `;
 
 // Handle command-line options
@@ -44,7 +44,7 @@ if (args.includes('--version') || args.includes('-v')) {
   try {
     const packageJsonPath = join(__dirname, '..', 'package.json');
     const packageJson = await import(packageJsonPath, { with: { type: 'json' } });
-    console.log(`MongoDB MCP Server v${packageJson.default.version}`);
+    console.log(`Mongo Scout MCP v${packageJson.default.version}`);
     process.exit(0);
   } catch (error) {
     console.error(
