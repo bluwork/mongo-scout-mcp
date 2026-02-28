@@ -6,6 +6,7 @@ import { checkAdminRateLimit, ADMIN_RATE_LIMIT } from '../utils/rate-limiter.js'
 import { sanitizeResponse } from '../utils/sanitize.js';
 import { validateAdminCommandParams, isWriteAdminCommand } from '../utils/admin-command-validator.js';
 import { preprocessQuery } from '../utils/query-preprocessor.js';
+import { redactAdminResponse } from '../utils/admin-response-redactor.js';
 import type { CurrentOpCommand, CurrentOpResult, ServerStatus, VerbosityLevel } from '../types.js';
 import { filterServerStatus, filterDatabaseStats, filterProfilerEntry, excludeZeroMetrics } from '../utils/response-filter.js';
 
@@ -259,7 +260,8 @@ export function registerMonitoringTools(server: McpServer, client: MongoClient, 
         const targetDb = client.db(database);
         const commandWithTimeout = { ...paramValidation.sanitizedCommand, maxTimeMS: safeTimeout };
         const result = await targetDb.admin().command(commandWithTimeout);
-        const sanitizedResult = sanitizeResponse(result);
+        const redactedResult = redactAdminResponse(commandName, result);
+        const sanitizedResult = sanitizeResponse(redactedResult);
 
         const responseText = paramValidation.warnings.length > 0
           ? `Warning: ${paramValidation.warnings.join('; ')}\n\n${JSON.stringify(sanitizedResult, null, 2)}`
