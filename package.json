@@ -9,7 +9,7 @@
     "start": "node dist/index.js",
     "dev": "ts-node --esm src/index.ts",
     "watch": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "prepublish": "pnpm run build",
+    "prepublishOnly": "pnpm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "prepare": "chmod +x bin/cli.js"
@@ -26,8 +26,18 @@
     "claude",
     "database"
   ],
-  "author": "",
-  "license": "ISC",
+  "author": "Boban Lukic",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bluwork/mongo-scout-mcp"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.21.1",
     "mongodb": "^6.20.0",
