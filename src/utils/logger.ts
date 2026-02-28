@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { redactString } from './uri-redactor.js';
 
 const LOG_DIR = process.env.LOG_DIR || './logs';
 const TOOL_LOG_FILE = path.join(LOG_DIR, 'tool-usage.log');
@@ -25,7 +26,7 @@ export function logToolUsage(toolName: string, args: unknown, callerInfo?: strin
   if (!ENABLE_LOGGING) return;
 
   const timestamp = new Date().toISOString();
-  const logEntry = `[${timestamp}] TOOL: ${toolName}\nArgs: ${JSON.stringify(args, null, 2)}\nCaller: ${
+  const logEntry = `[${timestamp}] TOOL: ${toolName}\nArgs: ${redactString(JSON.stringify(args, null, 2))}\nCaller: ${
     callerInfo || 'Unknown'
   }\n---\n`;
 
@@ -38,7 +39,7 @@ export function logToolUsage(toolName: string, args: unknown, callerInfo?: strin
 }
 
 export function logError(toolName: string, error: unknown, args?: unknown): void {
-  const errorMessage = error instanceof Error ? error.message : String(error);
+  const errorMessage = redactString(error instanceof Error ? error.message : String(error));
   const errorStack = error instanceof Error ? error.stack : undefined;
 
   console.error(`Error in ${toolName}: ${errorMessage}`);
@@ -46,11 +47,11 @@ export function logError(toolName: string, error: unknown, args?: unknown): void
   if (!ENABLE_LOGGING) return;
 
   const timestamp = new Date().toISOString();
-  const logEntry = `[${timestamp}] ERROR: ${toolName}\nError: ${errorMessage}\nStack: ${errorStack || 'N/A'}\nArgs: ${JSON.stringify(
+  const logEntry = `[${timestamp}] ERROR: ${toolName}\nError: ${errorMessage}\nStack: ${errorStack || 'N/A'}\nArgs: ${redactString(JSON.stringify(
     args,
     null,
     2
-  )}\n---\n`;
+  ))}\n---\n`;
 
   void ensureLogDir().then((ok) => {
     if (!ok) return;
