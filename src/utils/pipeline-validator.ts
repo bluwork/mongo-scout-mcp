@@ -1,3 +1,4 @@
+import { validateCollectionName } from './name-validator.js';
 import { scanForDangerousOperators } from './operator-validator.js';
 
 export const MAX_PIPELINE_STAGES = 20;
@@ -15,7 +16,7 @@ export interface PipelineValidationResult {
 
 function countStages(
   pipeline: Record<string, unknown>[],
-  totals: { stages: number; expensive: number; expensiveNames: string[]; writeStages: string[] }
+  totals: { stages: number; expensive: number; expensiveNames: string[]; writeStages: string[]; blockedCollections: string[] }
 ): void {
   for (const stage of pipeline) {
     if (totals.writeStages.length > 0) return;
@@ -41,8 +42,29 @@ function countStages(
     // Recurse into nested sub-pipelines for all keys (defense-in-depth against multi-key objects)
     for (const key of keys) {
       const stageBody = stage[key];
+      if (key === '$unionWith' && typeof stageBody === 'string') {
+        const nameCheck = validateCollectionName(stageBody);
+        if (!nameCheck.valid) {
+          totals.blockedCollections.push(stageBody);
+        }
+      }
       if (!stageBody || typeof stageBody !== 'object' || Array.isArray(stageBody)) continue;
       const body = stageBody as Record<string, unknown>;
+      // Check collection references for system collection access
+      if ((key === '$lookup' || key === '$graphLookup') && typeof body.from === 'string') {
+        const nameCheck = validateCollectionName(body.from);
+        if (!nameCheck.valid) {
+          totals.blockedCollections.push(body.from);
+        }
+      }
+      if (key === '$unionWith') {
+        if (typeof body.coll === 'string') {
+          const nameCheck = validateCollectionName(body.coll);
+          if (!nameCheck.valid) {
+            totals.blockedCollections.push(body.coll);
+          }
+        }
+      }
       if ((key === '$lookup' || key === '$graphLookup') && Array.isArray(body.pipeline)) {
         countStages(body.pipeline as Record<string, unknown>[], totals);
       }
@@ -71,8 +93,17 @@ export function validatePipeline(pipeline: Record<string, unknown>[]): PipelineV
     };
   }
 
-  const totals = { stages: 0, expensive: 0, expensiveNames: [] as string[], writeStages: [] as string[] };
+  const totals = { stages: 0, expensive: 0, expensiveNames: [] as string[], writeStages: [] as string[], blockedCollections: [] as string[] };
   countStages(pipeline, totals);
+
+  if (totals.blockedCollections.length > 0) {
+    return {
+      valid: false,
+      error: `Pipeline references blocked collection(s): ${totals.blockedCollections.join(', ')}. Access to system collections is not allowed in aggregation stages.`,
+      stageCount: totals.stages,
+      expensiveStageCount: totals.expensive,
+    };
+  }
 
   if (totals.writeStages.length > 0) {
     return {

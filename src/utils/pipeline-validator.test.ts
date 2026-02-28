@@ -326,4 +326,90 @@ describe('validatePipeline', () => {
     expect(result.valid).toBe(false);
     expect(result.error).toMatch(/blocked.*\$accumulator/i);
   });
+
+  describe('system collection guard', () => {
+    it('rejects $lookup from system.profile', () => {
+      const pipeline = [
+        { $lookup: { from: 'system.profile', localField: 'a', foreignField: 'b', as: 'data' } },
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('system.profile');
+    });
+
+    it('rejects $lookup from system.users', () => {
+      const pipeline = [
+        { $lookup: { from: 'system.users', localField: 'a', foreignField: 'b', as: 'data' } },
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('system.users');
+    });
+
+    it('rejects $graphLookup from system.profile', () => {
+      const pipeline = [
+        { $graphLookup: { from: 'system.profile', startWith: '$x', connectFromField: 'a', connectToField: 'b', as: 'data' } },
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('system.profile');
+    });
+
+    it('rejects $unionWith referencing system.profile (object form)', () => {
+      const pipeline = [
+        { $unionWith: { coll: 'system.profile' } },
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('system.profile');
+    });
+
+    it('rejects $unionWith referencing system.profile (string form)', () => {
+      const pipeline = [
+        { $unionWith: 'system.profile' },
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('system.profile');
+    });
+
+    it('rejects $lookup from system collection nested in $facet', () => {
+      const pipeline = [
+        {
+          $facet: {
+            branch: [
+              { $lookup: { from: 'system.js', localField: 'a', foreignField: 'b', as: 'data' } },
+            ],
+          },
+        },
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('system.js');
+    });
+
+    it('allows $lookup from normal collections', () => {
+      const pipeline = [
+        { $lookup: { from: 'orders', localField: 'a', foreignField: 'b', as: 'data' } },
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(true);
+    });
+
+    it('allows $unionWith normal collections', () => {
+      const pipeline = [
+        { $unionWith: { coll: 'orders' } },
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(true);
+    });
+
+    it('allows $unionWith normal collection (string form)', () => {
+      const pipeline = [
+        { $unionWith: 'orders' },
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(true);
+    });
+  });
 });
