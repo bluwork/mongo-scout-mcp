@@ -6,6 +6,7 @@ import { preprocessQuery } from '../utils/query-preprocessor.js';
 import { shouldBlockFilter, validateFilter, getOperationWarning } from '../utils/filter-validator.js';
 import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
 import { validatePipeline } from '../utils/pipeline-validator.js';
+import { MAX_QUERY_LIMIT } from '../utils/query-limits.js';
 
 export function registerDocumentTools(server: McpServer, db: Db, mode: string): void {
   const registerTool = (toolName: string, description: string, schema: any, handler: (args?: any) => any, writeOperation = false) => {
@@ -23,7 +24,7 @@ export function registerDocumentTools(server: McpServer, db: Db, mode: string): 
       collection: z.string(),
       query: z.record(z.any()).optional(),
       projection: z.record(z.any()).optional(),
-      limit: z.number().positive().optional(),
+      limit: z.number().positive().max(MAX_QUERY_LIMIT).optional(),
       skip: z.number().nonnegative().optional(),
       sort: z.record(z.number()).optional(),
       hint: z.record(z.number()).optional(),

@@ -29,7 +29,7 @@ export function parseArgs(): AppConfig {
     mode = normalizedMode;
   }
 
-  uri = uri || 'mongodb://localhost:27017';
+  uri = uri || process.env.MONGODB_URI || 'mongodb://localhost:27017';
   dbName = dbName || 'test';
 
   return { uri, dbName, mode, logDir: './logs' };

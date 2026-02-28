@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { logToolUsage, logError } from '../utils/logger.js';
 import { preprocessQuery } from '../utils/query-preprocessor.js';
 import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
+import { MAX_QUERY_LIMIT } from '../utils/query-limits.js';
 
 export function registerTemporalTools(server: McpServer, db: Db, mode: string): void {
   const registerTool = (toolName: string, description: string, schema: any, handler: (args?: any) => any, writeOperation = false) => {
@@ -26,7 +27,7 @@ export function registerTemporalTools(server: McpServer, db: Db, mode: string): 
       options: z.object({
         filter: z.record(z.any()).optional(),
         sort: z.record(z.number()).optional(),
-        limit: z.number().positive().optional(),
+        limit: z.number().positive().max(MAX_QUERY_LIMIT).optional(),
         projection: z.record(z.any()).optional(),
       }).optional(),
     },
@@ -134,7 +135,7 @@ export function registerTemporalTools(server: McpServer, db: Db, mode: string): 
       options: z.object({
         filter: z.record(z.any()).optional(),
         sort: z.record(z.number()).optional(),
-        limit: z.number().positive().optional(),
+        limit: z.number().positive().max(MAX_QUERY_LIMIT).optional(),
         projection: z.record(z.any()).optional(),
         groupBy: z.enum(['hour', 'day', 'week', 'month']).optional(),
       }).optional(),
