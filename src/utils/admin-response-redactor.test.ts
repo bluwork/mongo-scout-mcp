@@ -249,6 +249,99 @@ describe('redactAdminResponse', () => {
     });
   });
 
+  describe('top', () => {
+    it('filters namespaces to only the configured database', () => {
+      const response = {
+        totals: {
+          'test.users': { total: { time: 100, count: 10 } },
+          'test.orders': { total: { time: 50, count: 5 } },
+          'admin.system.version': { total: { time: 20, count: 2 } },
+          'config.system.sessions': { total: { time: 30, count: 3 } },
+          'local.oplog.rs': { total: { time: 200, count: 100 } },
+        },
+        ok: 1,
+      };
+      const result = redactAdminResponse('top', response, { dbName: 'test' });
+      expect(result.totals).toHaveProperty('test.users');
+      expect(result.totals).toHaveProperty('test.orders');
+      expect(result.totals).not.toHaveProperty('admin.system.version');
+      expect(result.totals).not.toHaveProperty('config.system.sessions');
+      expect(result.totals).not.toHaveProperty('local.oplog.rs');
+    });
+
+    it('keeps ok status', () => {
+      const response = { totals: { 'test.users': { total: { time: 1, count: 1 } } }, ok: 1 };
+      const result = redactAdminResponse('top', response, { dbName: 'test' });
+      expect(result.ok).toBe(1);
+    });
+
+    it('returns empty totals when no namespaces match', () => {
+      const response = {
+        totals: { 'admin.system.version': { total: { time: 1, count: 1 } } },
+        ok: 1,
+      };
+      const result = redactAdminResponse('top', response, { dbName: 'test' });
+      expect(result.totals).toEqual({});
+    });
+  });
+
+  describe('listCommands', () => {
+    it('returns only command names, not full details', () => {
+      const response = {
+        commands: {
+          find: { help: 'query documents', adminOnly: false, secondaryOk: true, slaveOk: true },
+          insert: { help: 'insert documents', adminOnly: false, secondaryOk: false, slaveOk: false },
+          dropDatabase: { help: 'drop db', adminOnly: true, secondaryOk: false, slaveOk: false },
+        },
+        ok: 1,
+      };
+      const result = redactAdminResponse('listcommands', response);
+      expect(result.commands).toEqual(['find', 'insert', 'dropDatabase']);
+      expect(result.ok).toBe(1);
+    });
+
+    it('adds redaction notice', () => {
+      const response = { commands: { find: { help: 'query' } }, ok: 1 };
+      const result = redactAdminResponse('listcommands', response);
+      expect(result._redacted).toBeDefined();
+    });
+  });
+
+  describe('buildInfo', () => {
+    it('strips buildEnvironment', () => {
+      const response = {
+        version: '7.0.26',
+        gitVersion: 'abc123',
+        modules: [],
+        allocator: 'tcmalloc',
+        buildEnvironment: {
+          distmod: 'ubuntu2204',
+          distarch: 'x86_64',
+          cc: '/opt/gcc/bin/gcc',
+          ccflags: '-fno-omit-frame-pointer',
+          cxx: '/opt/gcc/bin/g++',
+          target_arch: 'x86_64',
+          target_os: 'linux',
+        },
+        ok: 1,
+      };
+      const result = redactAdminResponse('buildinfo', response);
+      expect(result.buildEnvironment).toBeUndefined();
+    });
+
+    it('keeps version and ok', () => {
+      const response = {
+        version: '7.0.26',
+        gitVersion: 'abc123',
+        buildEnvironment: { cc: 'gcc' },
+        ok: 1,
+      };
+      const result = redactAdminResponse('buildinfo', response);
+      expect(result.version).toBe('7.0.26');
+      expect(result.ok).toBe(1);
+    });
+  });
+
   describe('passthrough', () => {
     it('returns response unchanged for unrecognized commands', () => {
       const response = { data: 'test', ok: 1 };

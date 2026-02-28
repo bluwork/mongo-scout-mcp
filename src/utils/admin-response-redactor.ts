@@ -83,19 +83,57 @@ function redactGetCmdLineOpts(response: Record<string, any>): Record<string, any
   return result;
 }
 
-const REDACTORS: Record<string, (r: Record<string, any>) => Record<string, any>> = {
+function redactTop(response: Record<string, any>, context?: RedactContext): Record<string, any> {
+  const result: Record<string, any> = { ok: response.ok };
+  const dbPrefix = context?.dbName ? `${context.dbName}.` : null;
+  const totals: Record<string, any> = {};
+  if (response.totals && typeof response.totals === 'object') {
+    for (const [ns, value] of Object.entries(response.totals)) {
+      if (dbPrefix && ns.startsWith(dbPrefix)) {
+        totals[ns] = value;
+      }
+    }
+  }
+  result.totals = totals;
+  return result;
+}
+
+function redactListCommands(response: Record<string, any>): Record<string, any> {
+  const result: Record<string, any> = { ok: response.ok };
+  if (response.commands && typeof response.commands === 'object') {
+    result.commands = Object.keys(response.commands);
+  }
+  result._redacted = 'Command details redacted. Only command names are shown.';
+  return result;
+}
+
+function redactBuildInfo(response: Record<string, any>): Record<string, any> {
+  const result = { ...response };
+  delete result.buildEnvironment;
+  return result;
+}
+
+export interface RedactContext {
+  dbName?: string;
+}
+
+const REDACTORS: Record<string, (r: Record<string, any>, ctx?: RedactContext) => Record<string, any>> = {
   connectionstatus: redactConnectionStatus,
   getparameter: redactGetParameter,
   getlog: redactGetLog,
   hostinfo: redactHostInfo,
   getcmdlineopts: redactGetCmdLineOpts,
+  top: redactTop,
+  listcommands: redactListCommands,
+  buildinfo: redactBuildInfo,
 };
 
 export function redactAdminResponse(
   commandName: string,
   response: Record<string, any>,
+  context?: RedactContext,
 ): Record<string, any> {
   const redactor = REDACTORS[commandName.toLowerCase()];
   if (!redactor) return response;
-  return redactor(response);
+  return redactor(response, context);
 }

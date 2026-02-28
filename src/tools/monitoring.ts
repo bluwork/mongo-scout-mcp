@@ -260,7 +260,7 @@ export function registerMonitoringTools(server: McpServer, client: MongoClient, 
         const targetDb = client.db(database);
         const commandWithTimeout = { ...paramValidation.sanitizedCommand, maxTimeMS: safeTimeout };
         const result = await targetDb.admin().command(commandWithTimeout);
-        const redactedResult = redactAdminResponse(commandName, result);
+        const redactedResult = redactAdminResponse(commandName, result, { dbName });
         const sanitizedResult = sanitizeResponse(redactedResult);
 
         const responseText = paramValidation.warnings.length > 0

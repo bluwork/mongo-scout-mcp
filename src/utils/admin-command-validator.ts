@@ -52,6 +52,17 @@ export function isWriteAdminCommand(commandName: string, command: Record<string,
     );
   }
 
+  if (name === 'explain') {
+    const explainValue = Object.entries(command).find(
+      ([k]) => k.toLowerCase() === 'explain'
+    )?.[1];
+    if (explainValue && typeof explainValue === 'object' && !Array.isArray(explainValue)) {
+      const WRITE_OPS = ['insert', 'update', 'delete', 'findandmodify', 'create', 'drop'];
+      const explainKeys = Object.keys(explainValue as Record<string, unknown>).map(k => k.toLowerCase());
+      return explainKeys.some(k => WRITE_OPS.includes(k));
+    }
+  }
+
   return false;
 }
 

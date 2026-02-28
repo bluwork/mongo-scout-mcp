@@ -199,6 +199,75 @@ describe('isWriteAdminCommand', () => {
     });
   });
 
+  describe('explain command', () => {
+    it('returns true when explain contains insert', () => {
+      expect(isWriteAdminCommand('explain', {
+        explain: { insert: 'pwned', documents: [{ x: 1 }] },
+      })).toBe(true);
+    });
+
+    it('returns true when explain contains update', () => {
+      expect(isWriteAdminCommand('explain', {
+        explain: { update: 'users', updates: [{ q: {}, u: { $set: { x: 1 } } }] },
+      })).toBe(true);
+    });
+
+    it('returns true when explain contains delete', () => {
+      expect(isWriteAdminCommand('explain', {
+        explain: { delete: 'users', deletes: [{ q: {}, limit: 0 }] },
+      })).toBe(true);
+    });
+
+    it('returns true when explain contains findAndModify', () => {
+      expect(isWriteAdminCommand('explain', {
+        explain: { findAndModify: 'users', query: {}, update: {} },
+      })).toBe(true);
+    });
+
+    it('returns true when explain contains create', () => {
+      expect(isWriteAdminCommand('explain', {
+        explain: { create: 'newcoll' },
+      })).toBe(true);
+    });
+
+    it('returns true when explain contains drop', () => {
+      expect(isWriteAdminCommand('explain', {
+        explain: { drop: 'users' },
+      })).toBe(true);
+    });
+
+    it('returns false when explain contains find (read operation)', () => {
+      expect(isWriteAdminCommand('explain', {
+        explain: { find: 'users', filter: { status: 'active' } },
+      })).toBe(false);
+    });
+
+    it('returns false when explain contains count (read operation)', () => {
+      expect(isWriteAdminCommand('explain', {
+        explain: { count: 'users', query: {} },
+      })).toBe(false);
+    });
+
+    it('returns false when explain contains aggregate (read operation)', () => {
+      expect(isWriteAdminCommand('explain', {
+        explain: { aggregate: 'users', pipeline: [{ $match: {} }], cursor: {} },
+      })).toBe(false);
+    });
+
+    it('is case-insensitive on command name', () => {
+      expect(isWriteAdminCommand('EXPLAIN', {
+        explain: { insert: 'pwned', documents: [{ x: 1 }] },
+      })).toBe(true);
+      expect(isWriteAdminCommand('Explain', {
+        explain: { find: 'users', filter: {} },
+      })).toBe(false);
+    });
+
+    it('returns false when explain value is not an object', () => {
+      expect(isWriteAdminCommand('explain', { explain: 'find' })).toBe(false);
+    });
+  });
+
   describe('other commands', () => {
     it('returns false for read-only commands', () => {
       expect(isWriteAdminCommand('ping', { ping: 1 })).toBe(false);

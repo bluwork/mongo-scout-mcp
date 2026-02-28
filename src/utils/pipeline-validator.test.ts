@@ -5,6 +5,7 @@ import {
   MAX_EXPENSIVE_STAGES,
   EXPENSIVE_STAGES,
   WRITE_STAGES,
+  BLOCKED_STAGES,
 } from './pipeline-validator.js';
 
 describe('validatePipeline', () => {
@@ -409,6 +410,65 @@ describe('validatePipeline', () => {
         { $unionWith: 'orders' },
       ];
       const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(true);
+    });
+  });
+
+  describe('blocked admin-like stages', () => {
+    it('exports BLOCKED_STAGES constant', () => {
+      expect(BLOCKED_STAGES).toContain('$currentOp');
+      expect(BLOCKED_STAGES).toContain('$listSessions');
+      expect(BLOCKED_STAGES).toContain('$listLocalSessions');
+      expect(BLOCKED_STAGES).toContain('$changeStream');
+    });
+
+    it('rejects $currentOp stage', () => {
+      const result = validatePipeline([{ $currentOp: {} }]);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('$currentOp');
+    });
+
+    it('rejects $listSessions stage', () => {
+      const result = validatePipeline([{ $listSessions: {} }]);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('$listSessions');
+    });
+
+    it('rejects $listLocalSessions stage', () => {
+      const result = validatePipeline([{ $listLocalSessions: {} }]);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('$listLocalSessions');
+    });
+
+    it('rejects $changeStream stage', () => {
+      const result = validatePipeline([{ $changeStream: {} }]);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('$changeStream');
+    });
+
+    it('rejects blocked stage nested in $facet', () => {
+      const pipeline = [
+        { $facet: { branch: [{ $currentOp: {} }] } },
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('$currentOp');
+    });
+
+    it('rejects blocked stage hidden as non-first key in multi-key object', () => {
+      const pipeline = [
+        { $match: { x: 1 }, $currentOp: {} } as any,
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('$currentOp');
+    });
+
+    it('allows normal stages alongside blocked stage check', () => {
+      const result = validatePipeline([
+        { $match: { status: 'active' } },
+        { $group: { _id: '$category', count: { $sum: 1 } } },
+      ]);
       expect(result.valid).toBe(true);
     });
   });
