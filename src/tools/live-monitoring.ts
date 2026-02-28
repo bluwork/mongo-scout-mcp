@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { logToolUsage, logError } from '../utils/logger.js';
 import { checkAdminRateLimit, ADMIN_RATE_LIMIT } from '../utils/rate-limiter.js';
 import { sanitizeResponse } from '../utils/sanitize.js';
+import { MAX_MONITORING_DURATION, MIN_MONITORING_INTERVAL, MAX_MONITORING_LIMIT } from '../utils/query-limits.js';
 import type {
   ServerStatus,
   LiveMetric,
@@ -30,8 +31,8 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
     'getLiveMetrics',
     'Get real-time performance metrics with continuous updates. Use includeRawSamples=false to get just the summary for token efficiency.',
     {
-      duration: z.number().positive().optional(),
-      interval: z.number().positive().optional(),
+      duration: z.number().positive().max(MAX_MONITORING_DURATION).optional(),
+      interval: z.number().min(MIN_MONITORING_INTERVAL).max(MAX_MONITORING_DURATION).optional(),
       includeRawSamples: z.boolean().optional(),
     },
     async (args) => {
@@ -56,7 +57,9 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
         let previousStatus = await db.admin().command({ serverStatus: 1 }) as ServerStatus;
 
         while (Date.now() - startTime < duration) {
-          await new Promise(resolve => setTimeout(resolve, interval));
+          const remaining = duration - (Date.now() - startTime);
+          if (remaining <= 0) break;
+          await new Promise(resolve => setTimeout(resolve, Math.min(interval, remaining)));
 
           const currentStatus = await db.admin().command({ serverStatus: 1 }) as ServerStatus;
 
@@ -147,8 +150,8 @@ export function registerLiveMonitoringTools(server: McpServer, db: Db, mode: str
     'getHottestCollections',
     'Get collections with highest activity based on operation counts',
     {
-      limit: z.number().positive().optional(),
-      sampleDuration: z.number().positive().optional(),
+      limit: z.number().positive().max(MAX_MONITORING_LIMIT).optional(),
+      sampleDuration: z.number().positive().max(MAX_MONITORING_DURATION).optional(),
     },
     async (args) => {
       logToolUsage('getHottestCollections', args);
