@@ -1,6 +1,6 @@
 {
   "name": "mongo-scout-mcp",
-  "version": "1.2.0",
+  "version": "1.0.0",
   "description": "Scout your MongoDB databases with AI - A production-ready MCP server with safety features, live monitoring, and data quality tools",
   "main": "dist/index.js",
   "type": "module",
@@ -34,6 +34,9 @@
   },
   "files": [
     "dist",
+    "!dist/**/*.js.map",
+    "!dist/**/*.d.ts.map",
+    "!dist/**/*.d.ts",
     "bin",
     "README.md",
     "LICENSE"
