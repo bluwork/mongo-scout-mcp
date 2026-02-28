@@ -311,6 +311,72 @@ describe('Fix 4: exportCollection default limit', () => {
 });
 
 /**
+ * Fix 6 (Issue 6): Aggregation result size must be capped in ALL aggregation paths,
+ * not just document.ts aggregate tool. safeAggregate in data-quality.ts
+ * and groupBy paths in temporal.ts must also apply capResultSize.
+ */
+describe('Fix 6: aggregation output size capped in data-quality tools', () => {
+  it('findDuplicates caps large aggregation results', async () => {
+    const { server, registeredTools } = createMockServer();
+    const { db, mockCollection } = createMockDb();
+
+    // Return a result that exceeds 1MB when serialized
+    const bigDoc = { _id: { field: 'val' }, count: 2, duplicates: [{ data: 'x'.repeat(200_000) }] };
+    const bigResult = Array.from({ length: 10 }, (_, i) => ({ ...bigDoc, _id: { field: `val${i}` } }));
+    mockCollection.toArray.mockResolvedValue(bigResult);
+
+    registerDataQualityTools(server, db, 'read-only');
+
+    const handler = registeredTools['findDuplicates']?.handler;
+    expect(handler).toBeDefined();
+
+    const result = await handler({ collection: 'users', fields: ['email'] });
+    const text = result.content[0].text;
+    // Output should be capped — either truncated warning or size under 1MB
+    const outputSize = Buffer.byteLength(text, 'utf-8');
+    expect(outputSize).toBeLessThanOrEqual(1_200_000); // 1MB + some overhead for warning text
+  });
+});
+
+/**
+ * Fix 9 (Issue 9): Deeply nested filters must be rejected through tool handlers,
+ * not just at the unit level. This tests the integration path.
+ */
+describe('Fix 9: filter nesting depth limit via tool handler', () => {
+  function buildNestedFilter(depth: number): Record<string, any> {
+    let filter: Record<string, any> = { status: 'active' };
+    for (let i = 0; i < depth; i++) {
+      filter = { $or: [filter, { level: i }] };
+    }
+    return filter;
+  }
+
+  it('getProfilerStats rejects filter nested 11 levels deep', async () => {
+    const { server, registeredTools } = createMockServer();
+    const { db, client } = createMockDb();
+    registerMonitoringTools(server, client, db, 'testdb', 'read-only');
+
+    const handler = registeredTools['getProfilerStats']?.handler;
+    expect(handler).toBeDefined();
+
+    const deepFilter = buildNestedFilter(11);
+    const result = await handler({ filter: deepFilter });
+    expect(result.content[0].text).toMatch(/depth|nesting/i);
+  });
+
+  it('getProfilerStats allows filter nested 10 levels deep', async () => {
+    const { server, registeredTools } = createMockServer();
+    const { db, client } = createMockDb();
+    registerMonitoringTools(server, client, db, 'testdb', 'read-only');
+
+    const handler = registeredTools['getProfilerStats']?.handler;
+    const okFilter = buildNestedFilter(10);
+    const result = await handler({ filter: okFilter });
+    expect(result.content[0].text).not.toMatch(/depth|nesting/i);
+  });
+});
+
+/**
  * Fix 5: Field names in exploreRelationships must be validated.
  */
 describe('Fix 5: field name validation', () => {

@@ -50,71 +50,37 @@ describe('redactAdminResponse', () => {
   });
 
   describe('getParameter', () => {
-    it('strips authenticationMechanisms', () => {
+    it('strips unknown/unrecognized parameters by default (allowlist approach)', () => {
+      const response = {
+        ldapServers: 'ldap://internal.corp:389',
+        auditLogDestination: 'file',
+        someFutureMongoParam: 'sensitive-value',
+        ok: 1,
+      };
+      const result = redactAdminResponse('getparameter', response);
+      expect(result.ldapServers).toBeUndefined();
+      expect(result.auditLogDestination).toBeUndefined();
+      expect(result.someFutureMongoParam).toBeUndefined();
+    });
+
+    it('strips known sensitive params (auth, TLS, keys)', () => {
       const response = {
         authenticationMechanisms: ['SCRAM-SHA-256'],
-        maxBSONObjectSize: 16777216,
+        tlsMode: 'disabled',
+        keyFile: '/path/to/keyfile',
+        clusterAuthMode: 'keyFile',
+        scramIterationCount: 10000,
         ok: 1,
       };
       const result = redactAdminResponse('getparameter', response);
       expect(result.authenticationMechanisms).toBeUndefined();
-      expect(result.maxBSONObjectSize).toBe(16777216);
-    });
-
-    it('strips scramIterationCount', () => {
-      const response = { scramIterationCount: 10000, ok: 1 };
-      const result = redactAdminResponse('getparameter', response);
+      expect(result.tlsMode).toBeUndefined();
+      expect(result.keyFile).toBeUndefined();
+      expect(result.clusterAuthMode).toBeUndefined();
       expect(result.scramIterationCount).toBeUndefined();
     });
 
-    it('strips scramSHA256IterationCount', () => {
-      const response = { scramSHA256IterationCount: 15000, ok: 1 };
-      const result = redactAdminResponse('getparameter', response);
-      expect(result.scramSHA256IterationCount).toBeUndefined();
-    });
-
-    it('strips saslHostName', () => {
-      const response = { saslHostName: 'host123', ok: 1 };
-      const result = redactAdminResponse('getparameter', response);
-      expect(result.saslHostName).toBeUndefined();
-    });
-
-    it('strips enableLocalhostAuthBypass', () => {
-      const response = { enableLocalhostAuthBypass: true, ok: 1 };
-      const result = redactAdminResponse('getparameter', response);
-      expect(result.enableLocalhostAuthBypass).toBeUndefined();
-    });
-
-    it('strips TLS/SSL related params', () => {
-      const response = {
-        tlsMode: 'disabled',
-        sslMode: 'disabled',
-        tlsCertificateKeyFile: '/path/to/key',
-        tlsCAFile: '/path/to/ca',
-        tlsClusterFile: '/path/to/cluster',
-        ok: 1,
-      };
-      const result = redactAdminResponse('getparameter', response);
-      expect(result.tlsMode).toBeUndefined();
-      expect(result.sslMode).toBeUndefined();
-      expect(result.tlsCertificateKeyFile).toBeUndefined();
-      expect(result.tlsCAFile).toBeUndefined();
-      expect(result.tlsClusterFile).toBeUndefined();
-    });
-
-    it('strips keyFile', () => {
-      const response = { keyFile: '/path/to/keyfile', ok: 1 };
-      const result = redactAdminResponse('getparameter', response);
-      expect(result.keyFile).toBeUndefined();
-    });
-
-    it('strips clusterAuthMode', () => {
-      const response = { clusterAuthMode: 'keyFile', ok: 1 };
-      const result = redactAdminResponse('getparameter', response);
-      expect(result.clusterAuthMode).toBeUndefined();
-    });
-
-    it('keeps safe params like maxBSONObjectSize', () => {
+    it('keeps allowlisted safe operational params', () => {
       const response = {
         maxBSONObjectSize: 16777216,
         internalQueryMaxBlockingSortMemoryUsageBytes: 104857600,
@@ -123,12 +89,36 @@ describe('redactAdminResponse', () => {
       const result = redactAdminResponse('getparameter', response);
       expect(result.maxBSONObjectSize).toBe(16777216);
       expect(result.internalQueryMaxBlockingSortMemoryUsageBytes).toBe(104857600);
+      expect(result.ok).toBe(1);
     });
 
-    it('adds redaction notice', () => {
+    it('adds redaction notice when params are stripped', () => {
       const response = { authenticationMechanisms: ['SCRAM'], ok: 1 };
       const result = redactAdminResponse('getparameter', response);
       expect(result._redacted).toBeDefined();
+    });
+
+    it('only returns allowlisted keys from a realistic getParameter * response', () => {
+      const response = {
+        // Safe operational params
+        maxBSONObjectSize: 16777216,
+        maxMessageSizeBytes: 48000000,
+        maxWriteBatchSize: 100000,
+        ok: 1,
+        // Sensitive params that must NOT leak
+        authenticationMechanisms: ['SCRAM-SHA-256'],
+        tlsCertificateKeyFile: '/etc/mongo/key.pem',
+        keyFile: '/etc/mongo/keyfile',
+        ldapServers: 'ldap://corp.internal',
+        auditLogPath: '/var/log/mongo/audit.json',
+        wiredTigerEngineRuntimeConfig: 'cache_size=4G',
+      };
+      const result = redactAdminResponse('getparameter', response);
+      const keys = Object.keys(result).filter(k => k !== '_redacted');
+      // Every key in the result must be either 'ok' or a known-safe param
+      for (const key of keys) {
+        expect(['maxBSONObjectSize', 'maxMessageSizeBytes', 'maxWriteBatchSize', 'ok']).toContain(key);
+      }
     });
   });
 
@@ -152,7 +142,50 @@ describe('redactAdminResponse', () => {
   });
 
   describe('hostInfo', () => {
-    it('strips extra section', () => {
+    it('strips os.version (leaks exact kernel version)', () => {
+      const response = {
+        system: { numCores: 8, cpuArch: 'x86_64', memSizeMB: 13859 },
+        os: { type: 'Linux', name: 'Ubuntu 22.04', version: '6.8.0-101-generic' },
+        ok: 1,
+      };
+      const result = redactAdminResponse('hostinfo', response);
+      expect(result.os.version).toBeUndefined();
+    });
+
+    it('strips system.hostname (leaks internal naming)', () => {
+      const response = {
+        system: { hostname: 'prod-db-01.internal', numCores: 8, cpuArch: 'x86_64', memSizeMB: 13859 },
+        os: { type: 'Linux', name: 'Ubuntu 22.04' },
+        ok: 1,
+      };
+      const result = redactAdminResponse('hostinfo', response);
+      expect(result.system.hostname).toBeUndefined();
+    });
+
+    it('strips system.currentTime, cpuFeatures, and extra', () => {
+      const response = {
+        system: {
+          currentTime: '2026-01-01T00:00:00Z',
+          hostname: 'host1',
+          cpuFeatures: 'sse,sse2,avx,avx2',
+          numCores: 8,
+          cpuArch: 'x86_64',
+          memSizeMB: 13859,
+          numPhysicalCores: 4,
+        },
+        os: { type: 'Linux', name: 'Ubuntu 22.04', version: '6.8.0' },
+        extra: { versionString: 'Linux version 6.8.0', pageSize: 4096 },
+        ok: 1,
+      };
+      const result = redactAdminResponse('hostinfo', response);
+      expect(result.extra).toBeUndefined();
+      expect(result.system.cpuFeatures).toBeUndefined();
+      expect(result.system.currentTime).toBeUndefined();
+      expect(result.system.hostname).toBeUndefined();
+      expect(result.os.version).toBeUndefined();
+    });
+
+    it('keeps only allowlisted system and os fields', () => {
       const response = {
         system: {
           currentTime: '2026-01-01',
@@ -163,44 +196,22 @@ describe('redactAdminResponse', () => {
           numCores: 8,
           numPhysicalCores: 4,
           cpuArch: 'x86_64',
-          cpuFrequencyMHz: '',
+          cpuFrequencyMHz: '3200',
           numaEnabled: false,
-          cpuFeatures: 'sse,sse2,avx,avx2',
+          cpuFeatures: 'sse,sse2,avx',
         },
-        os: { type: 'Linux', name: 'Ubuntu 22.04', version: 'Kernel 6.8.0' },
-        extra: {
-          versionString: 'Linux version 6.8.0',
-          pageSize: 4096,
-          numPages: 3547797,
-          maxOpenFiles: 1048576,
-        },
+        os: { type: 'Linux', name: 'Ubuntu 22.04', version: '6.8.0-101-generic' },
+        extra: { pageSize: 4096 },
         ok: 1,
       };
       const result = redactAdminResponse('hostinfo', response);
-      expect(result.extra).toBeUndefined();
-    });
-
-    it('strips cpuFeatures from system', () => {
-      const response = {
-        system: { cpuFeatures: 'sse,sse2,avx', numCores: 8, cpuArch: 'x86_64' },
-        os: { type: 'Linux' },
-        ok: 1,
-      };
-      const result = redactAdminResponse('hostinfo', response);
-      expect(result.system.cpuFeatures).toBeUndefined();
-    });
-
-    it('keeps OS name, architecture, CPU count, memory', () => {
-      const response = {
-        system: { numCores: 8, cpuArch: 'x86_64', memSizeMB: 13859, cpuFeatures: 'flags' },
-        os: { type: 'Linux', name: 'Ubuntu 22.04' },
-        ok: 1,
-      };
-      const result = redactAdminResponse('hostinfo', response);
-      expect(result.system.numCores).toBe(8);
-      expect(result.system.cpuArch).toBe('x86_64');
-      expect(result.system.memSizeMB).toBe(13859);
-      expect(result.os).toEqual({ type: 'Linux', name: 'Ubuntu 22.04' });
+      // system: only numCores, numPhysicalCores, cpuArch, memSizeMB
+      expect(Object.keys(result.system).sort()).toEqual(
+        ['cpuArch', 'memSizeMB', 'numCores', 'numPhysicalCores'].sort()
+      );
+      // os: only type and name
+      expect(Object.keys(result.os).sort()).toEqual(['name', 'type'].sort());
+      expect(result.ok).toBe(1);
     });
   });
 

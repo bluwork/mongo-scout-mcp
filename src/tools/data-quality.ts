@@ -6,12 +6,14 @@ import { preprocessQuery } from '../utils/query-preprocessor.js';
 import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
 import { assertNoDangerousOperators } from '../utils/operator-validator.js';
 import { validateCollectionName, validateFieldName } from '../utils/name-validator.js';
-import { MAX_QUERY_LIMIT, MAX_EXPORT_LIMIT, MAX_SAMPLE_SIZE } from '../utils/query-limits.js';
+import { MAX_QUERY_LIMIT, MAX_EXPORT_LIMIT, MAX_SAMPLE_SIZE, capResultSize } from '../utils/query-limits.js';
 
 async function safeAggregate(collection: Collection, pipeline: Document[], options?: AggregateOptions): Promise<Document[]> {
   const cursor = collection.aggregate(pipeline, options);
   try {
-    return await cursor.toArray();
+    const raw = await cursor.toArray();
+    const { result } = capResultSize(raw as Record<string, unknown>[]);
+    return result as Document[];
   } finally {
     try {
       await cursor.close();

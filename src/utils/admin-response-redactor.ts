@@ -1,24 +1,17 @@
-const SENSITIVE_GETPARAMETER_KEYS = new Set([
-  'authenticationMechanisms',
-  'scramIterationCount',
-  'scramSHA256IterationCount',
-  'saslHostName',
-  'saslauthdPath',
-  'enableLocalhostAuthBypass',
-  'tlsMode',
-  'sslMode',
-  'tlsCertificateKeyFile',
-  'tlsCAFile',
-  'tlsClusterFile',
-  'tlsCertificateKeyFilePassword',
-  'tlsClusterCAFile',
-  'tlsWithholdClientCertificate',
-  'keyFile',
-  'clusterAuthMode',
-  'saslServiceName',
-  'opensslCipherConfig',
-  'opensslCipherSuiteConfig',
-  'disableJavaScriptJIT',
+/** Allowlist: only these getParameter keys pass through. Everything else is redacted. */
+const SAFE_GETPARAMETER_KEYS = new Set([
+  'ok',
+  'maxBSONObjectSize',
+  'maxMessageSizeBytes',
+  'maxWriteBatchSize',
+  'maxWireVersion',
+  'minWireVersion',
+  'internalQueryMaxBlockingSortMemoryUsageBytes',
+  'internalQueryExecMaxBlockingSortBytes',
+  'internalQueryFacetBufferSizeBytes',
+  'internalDocumentSourceGroupMaxMemoryBytes',
+  'internalQueryMaxAddToSetBytes',
+  'cursor',
 ]);
 
 function redactConnectionStatus(response: Record<string, any>): Record<string, any> {
@@ -36,14 +29,14 @@ function redactGetParameter(response: Record<string, any>): Record<string, any> 
   const result: Record<string, any> = {};
   let redactedCount = 0;
   for (const [key, value] of Object.entries(response)) {
-    if (SENSITIVE_GETPARAMETER_KEYS.has(key)) {
-      redactedCount++;
-    } else {
+    if (SAFE_GETPARAMETER_KEYS.has(key)) {
       result[key] = value;
+    } else {
+      redactedCount++;
     }
   }
   if (redactedCount > 0) {
-    result._redacted = `${redactedCount} sensitive parameter(s) removed (auth, TLS, key config)`;
+    result._redacted = `${redactedCount} parameter(s) redacted. Only safe operational params are shown.`;
   }
   return result;
 }
@@ -55,14 +48,32 @@ function redactGetLog(response: Record<string, any>): Record<string, any> {
   return result;
 }
 
+const SAFE_HOSTINFO_SYSTEM_KEYS = new Set(['numCores', 'numPhysicalCores', 'cpuArch', 'memSizeMB']);
+const SAFE_HOSTINFO_OS_KEYS = new Set(['type', 'name']);
+
 function redactHostInfo(response: Record<string, any>): Record<string, any> {
-  const result = { ...response };
-  delete result.extra;
-  if (result.system && typeof result.system === 'object') {
-    const system = { ...result.system };
-    delete system.cpuFeatures;
+  const result: Record<string, any> = { ok: response.ok };
+
+  if (response.system && typeof response.system === 'object') {
+    const system: Record<string, any> = {};
+    for (const [key, value] of Object.entries(response.system)) {
+      if (SAFE_HOSTINFO_SYSTEM_KEYS.has(key)) {
+        system[key] = value;
+      }
+    }
     result.system = system;
   }
+
+  if (response.os && typeof response.os === 'object') {
+    const os: Record<string, any> = {};
+    for (const [key, value] of Object.entries(response.os)) {
+      if (SAFE_HOSTINFO_OS_KEYS.has(key)) {
+        os[key] = value;
+      }
+    }
+    result.os = os;
+  }
+
   return result;
 }
 
