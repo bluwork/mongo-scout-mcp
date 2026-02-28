@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateFilter, shouldBlockFilter, getOperationWarning } from './filter-validator.js';
+import { validateFilter, shouldBlockFilter, getOperationWarning, validateFilterDepth, MAX_FILTER_DEPTH } from './filter-validator.js';
 
 describe('validateFilter', () => {
   it('flags empty filter as isEmpty and isMatchAll', () => {
@@ -70,5 +70,63 @@ describe('getOperationWarning', () => {
   it('returns double warning for 1000+ documents', () => {
     const warning = getOperationWarning(5000, 'delete');
     expect(warning).toContain('LARGE OPERATION');
+  });
+});
+
+describe('validateFilterDepth', () => {
+  it('accepts a flat filter', () => {
+    const result = validateFilterDepth({ name: 'test', age: 25 });
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts moderately nested filter', () => {
+    const filter = { $or: [{ $and: [{ name: 'test' }] }] };
+    const result = validateFilterDepth(filter);
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects filter nested beyond MAX_FILTER_DEPTH', () => {
+    // Build a filter nested 11 levels deep via $or
+    let filter: any = { name: 'test' };
+    for (let i = 0; i < MAX_FILTER_DEPTH + 1; i++) {
+      filter = { $or: [filter] };
+    }
+    const result = validateFilterDepth(filter);
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('depth');
+  });
+
+  it('accepts filter at exactly MAX_FILTER_DEPTH', () => {
+    let filter: any = { name: 'test' };
+    for (let i = 0; i < MAX_FILTER_DEPTH; i++) {
+      filter = { $or: [filter] };
+    }
+    const result = validateFilterDepth(filter);
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects deeply nested $and chains', () => {
+    let filter: any = { status: 'active' };
+    for (let i = 0; i < MAX_FILTER_DEPTH + 1; i++) {
+      filter = { $and: [filter] };
+    }
+    const result = validateFilterDepth(filter);
+    expect(result.valid).toBe(false);
+  });
+
+  it('accepts custom maxDepth parameter', () => {
+    const filter = { $or: [{ $and: [{ name: 'test' }] }] };
+    const result = validateFilterDepth(filter, 2);
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects when exceeding custom maxDepth', () => {
+    const filter = { $or: [{ $and: [{ $or: [{ name: 'test' }] }] }] };
+    const result = validateFilterDepth(filter, 2);
+    expect(result.valid).toBe(false);
+  });
+
+  it('exports MAX_FILTER_DEPTH as 10', () => {
+    expect(MAX_FILTER_DEPTH).toBe(10);
   });
 });
