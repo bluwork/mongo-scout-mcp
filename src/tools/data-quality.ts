@@ -5,6 +5,8 @@ import { logToolUsage, logError } from '../utils/logger.js';
 import { preprocessQuery } from '../utils/query-preprocessor.js';
 import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
 import { assertNoDangerousOperators } from '../utils/operator-validator.js';
+import { validateCollectionName } from '../utils/name-validator.js';
+import { MAX_QUERY_LIMIT, MAX_EXPORT_LIMIT, MAX_SAMPLE_SIZE } from '../utils/query-limits.js';
 
 async function safeAggregate(collection: Collection, pipeline: Document[], options?: AggregateOptions): Promise<Document[]> {
   const cursor = collection.aggregate(pipeline, options);
@@ -398,7 +400,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
         format: z.enum(['json', 'jsonl', 'csv']).optional(),
         filter: z.record(z.any()).optional(),
         projection: z.record(z.any()).optional(),
-        limit: z.number().positive().optional(),
+        limit: z.number().positive().max(MAX_EXPORT_LIMIT).optional(),
         sort: z.record(z.number()).optional(),
         flatten: z.boolean().optional(),
         pretty: z.boolean().optional(),
@@ -580,7 +582,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
       requiredFields: z.array(z.string()),
       options: z.object({
         filter: z.record(z.any()).optional(),
-        sampleSize: z.number().positive().optional(),
+        sampleSize: z.number().positive().max(MAX_SAMPLE_SIZE).optional(),
         includeDocuments: z.boolean().optional(),
       }).optional(),
     },
@@ -711,7 +713,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
       field: z.string(),
       options: z.object({
         filter: z.record(z.any()).optional(),
-        sampleSize: z.number().positive().optional(),
+        sampleSize: z.number().positive().max(MAX_SAMPLE_SIZE).optional(),
         includeSamples: z.boolean().optional(),
         samplesPerType: z.number().positive().max(10).optional(),
       }).optional(),
@@ -1054,7 +1056,7 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
         filter: z.record(z.any()).optional(),
         sort: z.record(z.number()).optional(),
         projection: z.record(z.any()).optional(),
-        limit: z.number().optional(),
+        limit: z.number().positive().max(MAX_QUERY_LIMIT).optional(),
       }).optional(),
       options: z.object({
         verbosity: z.enum(['queryPlanner', 'executionStats', 'allPlansExecution']).optional(),
@@ -1377,6 +1379,17 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
         includeReverse = false,
         limit = 10,
       } = options;
+
+      // Validate all foreignCollection names in relationships array
+      for (const rel of relationships) {
+        const nameCheck = validateCollectionName(rel.foreignCollection);
+        if (!nameCheck.valid) {
+          return {
+            content: [{ type: 'text' as const, text: `Error: ${nameCheck.error}` }],
+            isError: true,
+          };
+        }
+      }
 
       try {
         // Validate that either documentId or filter is provided
