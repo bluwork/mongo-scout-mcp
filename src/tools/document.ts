@@ -7,6 +7,8 @@ import { shouldBlockFilter, validateFilter, getOperationWarning } from '../utils
 import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
 import { validatePipeline } from '../utils/pipeline-validator.js';
 import { MAX_QUERY_LIMIT } from '../utils/query-limits.js';
+import { capResultSize } from '../utils/query-limits.js';
+import { sanitizeAggregateOptions } from '../utils/aggregate-options-sanitizer.js';
 
 export function registerDocumentTools(server: McpServer, db: Db, mode: string): void {
   const registerTool = (toolName: string, description: string, schema: any, handler: (args?: any) => any, writeOperation = false) => {
@@ -109,12 +111,16 @@ export function registerDocumentTools(server: McpServer, db: Db, mode: string): 
       }
 
       try {
-        const result = await db.collection(collection).aggregate(pipeline, options).toArray();
+        const safeOptions = sanitizeAggregateOptions({ maxTimeMS: 30000, ...options });
+        const rawResult = await db.collection(collection).aggregate(pipeline, safeOptions).toArray();
+        const { result, truncated, warning } = capResultSize(rawResult as Record<string, unknown>[]);
+        const serialized = JSON.stringify(convertObjectIdsToExtendedJson(result), null, 2);
+        const text = truncated ? `${warning}\n\n${serialized}` : serialized;
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(convertObjectIdsToExtendedJson(result), null, 2),
+              text,
             },
           ],
         };

@@ -214,6 +214,13 @@ export function registerAdvancedOperations(server: McpServer, db: Db, mode: stri
     async (args) => {
       logToolUsage('explainQuery', args);
       const { collection, operation, query, update, pipeline, verbosity = 'queryPlanner' } = args;
+
+      if (mode === 'read-only' && (operation === 'update' || operation === 'delete')) {
+        return {
+          content: [{ type: 'text', text: `Explain for ${operation} operations is not allowed in read-only mode.` }],
+        };
+      }
+
       try {
         const processedQuery = preprocessQuery(query);
         let explainResult;

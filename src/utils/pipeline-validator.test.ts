@@ -5,6 +5,7 @@ import {
   MAX_EXPENSIVE_STAGES,
   EXPENSIVE_STAGES,
   WRITE_STAGES,
+  BLOCKED_STAGES,
 } from './pipeline-validator.js';
 
 describe('validatePipeline', () => {
@@ -73,6 +74,15 @@ describe('validatePipeline', () => {
     const pipeline = EXPENSIVE_STAGES.map((stage) => ({ [stage]: {} }));
     const result = validatePipeline(pipeline);
     expect(result.expensiveStageCount).toBe(EXPENSIVE_STAGES.length);
+  });
+
+  it('detects expensive stage hidden as non-first key in multi-key object', () => {
+    const pipeline = Array.from({ length: MAX_EXPENSIVE_STAGES + 1 }, () => ({
+      $match: { x: 1 }, $lookup: { from: 'other', localField: 'a', foreignField: 'b', as: 'c' },
+    } as any));
+    const result = validatePipeline(pipeline);
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('expensive stages');
   });
 
   it('exports expected constants', () => {
@@ -325,5 +335,150 @@ describe('validatePipeline', () => {
     ]);
     expect(result.valid).toBe(false);
     expect(result.error).toMatch(/blocked.*\$accumulator/i);
+  });
+
+  describe('system collection guard', () => {
+    it('rejects $lookup from system.profile', () => {
+      const pipeline = [
+        { $lookup: { from: 'system.profile', localField: 'a', foreignField: 'b', as: 'data' } },
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('system.profile');
+    });
+
+    it('rejects $lookup from system.users', () => {
+      const pipeline = [
+        { $lookup: { from: 'system.users', localField: 'a', foreignField: 'b', as: 'data' } },
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('system.users');
+    });
+
+    it('rejects $graphLookup from system.profile', () => {
+      const pipeline = [
+        { $graphLookup: { from: 'system.profile', startWith: '$x', connectFromField: 'a', connectToField: 'b', as: 'data' } },
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('system.profile');
+    });
+
+    it('rejects $unionWith referencing system.profile (object form)', () => {
+      const pipeline = [
+        { $unionWith: { coll: 'system.profile' } },
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('system.profile');
+    });
+
+    it('rejects $unionWith referencing system.profile (string form)', () => {
+      const pipeline = [
+        { $unionWith: 'system.profile' },
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('system.profile');
+    });
+
+    it('rejects $lookup from system collection nested in $facet', () => {
+      const pipeline = [
+        {
+          $facet: {
+            branch: [
+              { $lookup: { from: 'system.js', localField: 'a', foreignField: 'b', as: 'data' } },
+            ],
+          },
+        },
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('system.js');
+    });
+
+    it('allows $lookup from normal collections', () => {
+      const pipeline = [
+        { $lookup: { from: 'orders', localField: 'a', foreignField: 'b', as: 'data' } },
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(true);
+    });
+
+    it('allows $unionWith normal collections', () => {
+      const pipeline = [
+        { $unionWith: { coll: 'orders' } },
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(true);
+    });
+
+    it('allows $unionWith normal collection (string form)', () => {
+      const pipeline = [
+        { $unionWith: 'orders' },
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(true);
+    });
+  });
+
+  describe('blocked admin-like stages', () => {
+    it('exports BLOCKED_STAGES constant', () => {
+      expect(BLOCKED_STAGES).toContain('$currentOp');
+      expect(BLOCKED_STAGES).toContain('$listSessions');
+      expect(BLOCKED_STAGES).toContain('$listLocalSessions');
+      expect(BLOCKED_STAGES).toContain('$changeStream');
+    });
+
+    it('rejects $currentOp stage', () => {
+      const result = validatePipeline([{ $currentOp: {} }]);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('$currentOp');
+    });
+
+    it('rejects $listSessions stage', () => {
+      const result = validatePipeline([{ $listSessions: {} }]);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('$listSessions');
+    });
+
+    it('rejects $listLocalSessions stage', () => {
+      const result = validatePipeline([{ $listLocalSessions: {} }]);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('$listLocalSessions');
+    });
+
+    it('rejects $changeStream stage', () => {
+      const result = validatePipeline([{ $changeStream: {} }]);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('$changeStream');
+    });
+
+    it('rejects blocked stage nested in $facet', () => {
+      const pipeline = [
+        { $facet: { branch: [{ $currentOp: {} }] } },
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('$currentOp');
+    });
+
+    it('rejects blocked stage hidden as non-first key in multi-key object', () => {
+      const pipeline = [
+        { $match: { x: 1 }, $currentOp: {} } as any,
+      ];
+      const result = validatePipeline(pipeline);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('$currentOp');
+    });
+
+    it('allows normal stages alongside blocked stage check', () => {
+      const result = validatePipeline([
+        { $match: { status: 'active' } },
+        { $group: { _id: '$category', count: { $sum: 1 } } },
+      ]);
+      expect(result.valid).toBe(true);
+    });
   });
 });

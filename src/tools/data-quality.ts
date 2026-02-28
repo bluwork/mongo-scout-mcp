@@ -6,10 +6,12 @@ import { preprocessQuery } from '../utils/query-preprocessor.js';
 import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
 import { assertNoDangerousOperators } from '../utils/operator-validator.js';
 import { validateCollectionName, validateFieldName } from '../utils/name-validator.js';
-import { MAX_QUERY_LIMIT, MAX_EXPORT_LIMIT, MAX_SAMPLE_SIZE } from '../utils/query-limits.js';
+import { MAX_QUERY_LIMIT, MAX_EXPORT_LIMIT, MAX_SAMPLE_SIZE, capResultSize } from '../utils/query-limits.js';
+import { sanitizeAggregateOptions } from '../utils/aggregate-options-sanitizer.js';
 
 async function safeAggregate(collection: Collection, pipeline: Document[], options?: AggregateOptions): Promise<Document[]> {
-  const cursor = collection.aggregate(pipeline, options);
+  const sanitized = options ? sanitizeAggregateOptions(options as Record<string, unknown>) as AggregateOptions : undefined;
+  const cursor = collection.aggregate(pipeline, sanitized);
   try {
     return await cursor.toArray();
   } finally {
@@ -149,6 +151,9 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
           }
         }
 
+        const { result: cappedGroups, truncated: groupsTruncated, warning: groupsWarning } =
+          capResultSize(duplicateGroups as Record<string, unknown>[]);
+
         return {
           content: [
             {
@@ -165,7 +170,8 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
                     duplicateDocuments: affectedDocuments,
                     duplicatePercentage: parseFloat(duplicatePercentage.toFixed(2)),
                   },
-                  duplicateGroups,
+                  duplicateGroups: cappedGroups,
+                  ...(groupsTruncated ? { warning: groupsWarning } : {}),
                   recommendations,
                 },
                 null,
@@ -1334,7 +1340,9 @@ export function registerDataQualityTools(server: McpServer, db: Db, mode: string
                     orphanedDocuments: totalOrphans,
                     orphanPercentage,
                   },
-                  orphans: includeDocuments ? orphans : orphans.map(o => ({ _id: o._id, [foreignKey]: o[foreignKey] })),
+                  orphans: capResultSize(
+                    (includeDocuments ? orphans : orphans.map(o => ({ _id: o._id, [foreignKey]: o[foreignKey] }))) as Record<string, unknown>[]
+                  ).result,
                   executionTimeMs,
                   recommendations,
                 },

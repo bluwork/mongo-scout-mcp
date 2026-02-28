@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { logToolUsage, logError } from '../utils/logger.js';
 import { preprocessQuery } from '../utils/query-preprocessor.js';
 import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
-import { MAX_QUERY_LIMIT } from '../utils/query-limits.js';
+import { MAX_QUERY_LIMIT, capResultSize } from '../utils/query-limits.js';
 
 export function registerTemporalTools(server: McpServer, db: Db, mode: string): void {
   const registerTool = (toolName: string, description: string, schema: any, handler: (args?: any) => any, writeOperation = false) => {
@@ -204,7 +204,8 @@ export function registerTemporalTools(server: McpServer, db: Db, mode: string): 
             pipeline.push({ $limit: limit });
           }
 
-          const grouped = await collectionObj.aggregate(pipeline).toArray();
+          const rawGrouped = await collectionObj.aggregate(pipeline).toArray();
+          const { result: grouped } = capResultSize(rawGrouped as Record<string, unknown>[]);
 
           return {
             content: [
@@ -349,7 +350,8 @@ export function registerTemporalTools(server: McpServer, db: Db, mode: string): 
           { $sort: { _id: 1 } },
         ];
 
-        const grouped = await collectionObj.aggregate(pipeline).toArray();
+        const rawGrouped = await collectionObj.aggregate(pipeline).toArray();
+        const { result: grouped } = capResultSize(rawGrouped as Record<string, unknown>[]);
 
         if (grouped.length === 0) {
           return {

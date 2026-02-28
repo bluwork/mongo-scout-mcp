@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Db, MongoClient } from 'mongodb';
 import { registerMonitoringTools } from './monitoring.js';
+import { registerDocumentTools } from './document.js';
+import { registerAdvancedOperations } from './advanced-operations.js';
 import { registerDataQualityTools } from './data-quality.js';
 import { registerLiveMonitoringTools } from './live-monitoring.js';
 import { validateFieldName } from '../utils/name-validator.js';
@@ -311,6 +313,74 @@ describe('Fix 4: exportCollection default limit', () => {
 });
 
 /**
+ * Fix 6 (Issue 6): Aggregation result size must be capped in ALL aggregation paths,
+ * not just document.ts aggregate tool. safeAggregate in data-quality.ts
+ * and groupBy paths in temporal.ts must also apply capResultSize.
+ */
+describe('Fix 6: aggregation output size capped in data-quality tools', () => {
+  it('findDuplicates caps large aggregation results', async () => {
+    const { server, registeredTools } = createMockServer();
+    const { db, mockCollection } = createMockDb();
+
+    // Return a result that exceeds 1MB when serialized
+    const bigDoc = { _id: { field: 'val' }, count: 2, duplicates: [{ data: 'x'.repeat(200_000) }] };
+    const bigResult = Array.from({ length: 10 }, (_, i) => ({ ...bigDoc, _id: { field: `val${i}` } }));
+    mockCollection.toArray.mockResolvedValue(bigResult);
+
+    registerDataQualityTools(server, db, 'read-only');
+
+    const handler = registeredTools['findDuplicates']?.handler;
+    expect(handler).toBeDefined();
+
+    const result = await handler({ collection: 'users', fields: ['email'] });
+    const text = result.content[0].text;
+    // Output should be capped — either truncated warning or size under 1MB
+    const outputSize = Buffer.byteLength(text, 'utf-8');
+    expect(outputSize).toBeLessThanOrEqual(1_200_000); // 1MB + some overhead for warning text
+  });
+});
+
+/**
+ * Fix 9 (Issue 9): Deeply nested filters must be rejected through tool handlers,
+ * not just at the unit level. This tests the integration path.
+ */
+describe('Fix 9: filter nesting depth limit via tool handler', () => {
+  function buildNestedFilter(depth: number): Record<string, any> {
+    let filter: Record<string, any> = { status: 'active' };
+    for (let i = 0; i < depth; i++) {
+      filter = { $or: [filter, { level: i }] };
+    }
+    return filter;
+  }
+
+  it('getProfilerStats rejects filter exceeding MAX_FILTER_DEPTH', async () => {
+    const { server, registeredTools } = createMockServer();
+    const { db, client } = createMockDb();
+    registerMonitoringTools(server, client, db, 'testdb', 'read-only');
+
+    const handler = registeredTools['getProfilerStats']?.handler;
+    expect(handler).toBeDefined();
+
+    // Each $or layer costs 2 depth (object + array), 6 layers = depth 12 > MAX_FILTER_DEPTH(10)
+    const deepFilter = buildNestedFilter(6);
+    const result = await handler({ filter: deepFilter });
+    expect(result.content[0].text).toMatch(/depth|nesting/i);
+  });
+
+  it('getProfilerStats allows filter at MAX_FILTER_DEPTH', async () => {
+    const { server, registeredTools } = createMockServer();
+    const { db, client } = createMockDb();
+    registerMonitoringTools(server, client, db, 'testdb', 'read-only');
+
+    const handler = registeredTools['getProfilerStats']?.handler;
+    // Each $or layer costs 2 depth (object + array), 5 layers = depth 10 = MAX_FILTER_DEPTH
+    const okFilter = buildNestedFilter(5);
+    const result = await handler({ filter: okFilter });
+    expect(result.content[0].text).not.toMatch(/depth|nesting/i);
+  });
+});
+
+/**
  * Fix 5: Field names in exploreRelationships must be validated.
  */
 describe('Fix 5: field name validation', () => {
@@ -377,5 +447,185 @@ describe('Fix 5: field name validation', () => {
     });
     expect(result.content[0].text).toMatch(/\$|field name|error/i);
     expect(result.isError).toBe(true);
+  });
+});
+
+/**
+ * Fix 11 (CRITICAL): aggregate options.out bypass — read-only mode can write
+ * via legacy `out` option in aggregate options object.
+ * sanitizeAggregateOptions must strip `out` and other write-enabling keys.
+ */
+describe('Fix 11: aggregate options.out bypass is blocked', () => {
+  it('strips options.out from aggregate call (string format)', async () => {
+    const { server, registeredTools } = createMockServer();
+    const { db, mockCollection } = createMockDb();
+    registerDocumentTools(server, db, 'read-only');
+
+    const handler = registeredTools['aggregate']?.handler;
+    expect(handler).toBeDefined();
+
+    await handler({
+      collection: 'users',
+      pipeline: [{ $match: {} }],
+      options: { out: 'pwned' },
+    });
+
+    // Verify aggregate was called with options that do NOT contain `out`
+    const callArgs = mockCollection.aggregate.mock.calls[0];
+    expect(callArgs[1]).not.toHaveProperty('out');
+  });
+
+  it('strips options.out from aggregate call (object format)', async () => {
+    const { server, registeredTools } = createMockServer();
+    const { db, mockCollection } = createMockDb();
+    registerDocumentTools(server, db, 'read-only');
+
+    const handler = registeredTools['aggregate']?.handler;
+    await handler({
+      collection: 'users',
+      pipeline: [{ $match: {} }],
+      options: { out: { db: 'admin', coll: 'x' } },
+    });
+
+    const callArgs = mockCollection.aggregate.mock.calls[0];
+    expect(callArgs[1]).not.toHaveProperty('out');
+  });
+
+  it('strips writeConcern and bypassDocumentValidation from aggregate options', async () => {
+    const { server, registeredTools } = createMockServer();
+    const { db, mockCollection } = createMockDb();
+    registerDocumentTools(server, db, 'read-only');
+
+    const handler = registeredTools['aggregate']?.handler;
+    await handler({
+      collection: 'users',
+      pipeline: [{ $match: {} }],
+      options: { writeConcern: { w: 1 }, bypassDocumentValidation: true, comment: 'legit' },
+    });
+
+    const callArgs = mockCollection.aggregate.mock.calls[0];
+    expect(callArgs[1]).not.toHaveProperty('writeConcern');
+    expect(callArgs[1]).not.toHaveProperty('bypassDocumentValidation');
+    expect(callArgs[1]).toHaveProperty('comment', 'legit');
+  });
+
+  it('preserves safe options (maxTimeMS, allowDiskUse, hint)', async () => {
+    const { server, registeredTools } = createMockServer();
+    const { db, mockCollection } = createMockDb();
+    registerDocumentTools(server, db, 'read-only');
+
+    const handler = registeredTools['aggregate']?.handler;
+    await handler({
+      collection: 'users',
+      pipeline: [{ $match: {} }],
+      options: { maxTimeMS: 5000, allowDiskUse: true, hint: { _id: 1 } },
+    });
+
+    const callArgs = mockCollection.aggregate.mock.calls[0];
+    expect(callArgs[1]).toHaveProperty('maxTimeMS', 5000);
+    expect(callArgs[1]).toHaveProperty('allowDiskUse', true);
+    expect(callArgs[1]).toHaveProperty('hint');
+  });
+
+  it('blocks options.out in read-write mode too (consistent with $out pipeline block)', async () => {
+    const { server, registeredTools } = createMockServer();
+    const { db, mockCollection } = createMockDb();
+    registerDocumentTools(server, db, 'read-write');
+
+    const handler = registeredTools['aggregate']?.handler;
+    await handler({
+      collection: 'users',
+      pipeline: [{ $match: {} }],
+      options: { out: 'pwned' },
+    });
+
+    const callArgs = mockCollection.aggregate.mock.calls[0];
+    expect(callArgs[1]).not.toHaveProperty('out');
+  });
+});
+
+/**
+ * Fix 12 (MEDIUM): explainQuery allows UPDATE/DELETE plans on read-only.
+ * Write operation plans should be blocked in read-only mode.
+ */
+describe('Fix 12: explainQuery blocks write operations in read-only mode', () => {
+  it('rejects operation: "update" in read-only mode', async () => {
+    const { server, registeredTools } = createMockServer();
+    const { db } = createMockDb();
+    registerAdvancedOperations(server, db, 'read-only');
+
+    const handler = registeredTools['explainQuery']?.handler;
+    expect(handler).toBeDefined();
+
+    const result = await handler({
+      collection: 'users',
+      operation: 'update',
+      query: { _id: 1 },
+      update: { $set: { hacked: true } },
+    });
+    expect(result.content[0].text).toMatch(/read-only|not allowed|blocked/i);
+  });
+
+  it('rejects operation: "delete" in read-only mode', async () => {
+    const { server, registeredTools } = createMockServer();
+    const { db } = createMockDb();
+    registerAdvancedOperations(server, db, 'read-only');
+
+    const handler = registeredTools['explainQuery']?.handler;
+    const result = await handler({
+      collection: 'users',
+      operation: 'delete',
+      query: { _id: 1 },
+    });
+    expect(result.content[0].text).toMatch(/read-only|not allowed|blocked/i);
+  });
+
+  it('allows operation: "find" in read-only mode', async () => {
+    const { server, registeredTools } = createMockServer();
+    const { db, mockCollection } = createMockDb();
+    const mockExplain = vi.fn().mockResolvedValue({ queryPlanner: {} });
+    mockCollection.find = vi.fn().mockReturnValue({ explain: mockExplain });
+    registerAdvancedOperations(server, db, 'read-only');
+
+    const handler = registeredTools['explainQuery']?.handler;
+    const result = await handler({
+      collection: 'users',
+      operation: 'find',
+      query: { status: 'active' },
+    });
+    expect(result.content[0].text).not.toMatch(/read-only|not allowed|blocked/i);
+  });
+
+  it('allows operation: "aggregate" in read-only mode', async () => {
+    const { server, registeredTools } = createMockServer();
+    const { db, mockCollection } = createMockDb();
+    const mockExplain = vi.fn().mockResolvedValue({ queryPlanner: {} });
+    mockCollection.aggregate = vi.fn().mockReturnValue({ explain: mockExplain, toArray: vi.fn().mockResolvedValue([]) });
+    registerAdvancedOperations(server, db, 'read-only');
+
+    const handler = registeredTools['explainQuery']?.handler;
+    const result = await handler({
+      collection: 'users',
+      operation: 'aggregate',
+      query: {},
+      pipeline: [{ $match: {} }],
+    });
+    expect(result.content[0].text).not.toMatch(/read-only|not allowed|blocked/i);
+  });
+
+  it('allows operation: "update" in read-write mode', async () => {
+    const { server, registeredTools } = createMockServer();
+    const { db } = createMockDb();
+    registerAdvancedOperations(server, db, 'read-write');
+
+    const handler = registeredTools['explainQuery']?.handler;
+    const result = await handler({
+      collection: 'users',
+      operation: 'update',
+      query: { _id: 1 },
+      update: { $set: { x: 1 } },
+    });
+    // Should not be blocked in read-write mode
+    expect(result.content[0].text).not.toMatch(/read-only|not allowed|blocked/i);
   });
 });

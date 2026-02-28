@@ -71,3 +71,42 @@ Recommended: Use preview${operationName.charAt(0).toUpperCase() + operationName.
 
   return { blocked: false };
 }
+
+export const MAX_FILTER_DEPTH = 10;
+
+export function validateFilterDepth(
+  filter: Record<string, any>,
+  maxDepth: number = MAX_FILTER_DEPTH,
+): { valid: boolean; error?: string } {
+  function measure(obj: unknown, depth: number): number {
+    if (depth > maxDepth) return depth;
+    if (!obj || typeof obj !== 'object') return depth;
+
+    if (Array.isArray(obj)) {
+      let max = depth;
+      for (const item of obj) {
+        max = Math.max(max, measure(item, depth + 1));
+        if (max > maxDepth) return max;
+      }
+      return max;
+    }
+
+    let max = depth;
+    for (const value of Object.values(obj)) {
+      if (value && typeof value === 'object') {
+        max = Math.max(max, measure(value, depth + 1));
+        if (max > maxDepth) return max;
+      }
+    }
+    return max;
+  }
+
+  const depth = measure(filter, 0);
+  if (depth > maxDepth) {
+    return {
+      valid: false,
+      error: `Filter nesting depth (${depth}) exceeds maximum allowed depth of ${maxDepth}. Simplify the query.`,
+    };
+  }
+  return { valid: true };
+}
