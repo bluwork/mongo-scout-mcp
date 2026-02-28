@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { logToolUsage, logError } from '../utils/logger.js';
 import type { MongoDocument } from '../types.js';
 import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
+import { MAX_SAMPLE_SIZE } from '../utils/query-limits.js';
 
 export function registerSchemaTools(server: McpServer, db: Db): void {
   server.tool(
@@ -12,7 +13,7 @@ export function registerSchemaTools(server: McpServer, db: Db): void {
     'Infer the schema of a collection from its documents',
     {
       collection: z.string(),
-      sampleSize: z.number().positive().optional(),
+      sampleSize: z.number().positive().max(MAX_SAMPLE_SIZE).optional(),
     },
     async (args) => {
       logToolUsage('inferSchema', args);

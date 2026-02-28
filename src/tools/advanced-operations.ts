@@ -6,6 +6,7 @@ import { preprocessQuery } from '../utils/query-preprocessor.js';
 import { convertObjectIdsToExtendedJson } from '../utils/sanitize.js';
 import { validatePipeline } from '../utils/pipeline-validator.js';
 import { validateBulkOperations } from '../utils/bulk-write-validator.js';
+import { MAX_QUERY_LIMIT } from '../utils/query-limits.js';
 
 export function registerAdvancedOperations(server: McpServer, db: Db, mode: string): void {
   const registerTool = (toolName: string, description: string, schema: any, handler: (args?: any) => any, writeOperation = false) => {
@@ -292,7 +293,7 @@ export function registerAdvancedOperations(server: McpServer, db: Db, mode: stri
       collection: z.string(),
       searchText: z.string(),
       filter: z.record(z.any()).optional(),
-      limit: z.number().positive().optional(),
+      limit: z.number().positive().max(MAX_QUERY_LIMIT).optional(),
       projection: z.record(z.any()).optional(),
     },
     async (args) => {
