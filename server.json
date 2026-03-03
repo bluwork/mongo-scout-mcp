@@ -1,0 +1,42 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-16/server.schema.json",
+  "name": "io.github.bluwork/mongo-scout-mcp",
+  "description": "Scout your MongoDB databases with AI - MCP server with safety features, live monitoring, and data quality tools",
+  "version": "1.0.1",
+  "packages": [
+    {
+      "identifier": "mongo-scout-mcp",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "registryType": "npm",
+      "transport": { "type": "stdio" },
+      "version": "1.0.1",
+      "packageArguments": [
+        {
+          "description": "Server mode: read-only (default) or read-write",
+          "isRequired": false,
+          "format": "string",
+          "name": "--mode",
+          "value": "read-only"
+        },
+        {
+          "description": "MongoDB connection URI",
+          "isRequired": false,
+          "format": "string",
+          "valueHint": "mongodb-uri",
+          "value": "mongodb://localhost:27017"
+        },
+        {
+          "description": "Database name to use",
+          "isRequired": false,
+          "format": "string",
+          "valueHint": "database-name",
+          "value": "test"
+        }
+      ]
+    }
+  ],
+  "repository": {
+    "source": "github",
+    "url": "https://github.com/bluwork/mongo-scout-mcp"
+  }
+}
