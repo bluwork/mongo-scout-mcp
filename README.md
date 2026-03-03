@@ -2,6 +2,8 @@
 
 Scout your MongoDB databases with AI - A production-ready Model Context Protocol server with built-in safety features, live monitoring, and data quality tools.
 
+[![npm](https://img.shields.io/npm/v/mongo-scout-mcp)](https://www.npmjs.com/package/mongo-scout-mcp) [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 ## Setup
 
 ### Claude Desktop / Claude Code
