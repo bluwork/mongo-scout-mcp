@@ -1,6 +1,6 @@
 {
   "name": "mongo-scout-mcp",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Scout your MongoDB databases with AI - A production-ready MCP server with safety features, live monitoring, and data quality tools",
   "main": "dist/index.js",
   "type": "module",
@@ -42,17 +42,17 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.21.1",
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "mongodb": "^6.20.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@cfworker/json-schema": "^4.1.1",
-    "@types/node": "^22.19.0",
+    "@types/node": "^25.3.3",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3",
-    "vitest": "^3.0.5"
+    "vitest": "^4.0.18"
   },
   "mcpName": "io.github.bluwork/mongo-scout-mcp"
 }
